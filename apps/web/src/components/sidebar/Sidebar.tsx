@@ -52,8 +52,8 @@ const NAV_SECTION_TPO_ACADEMICS = [
 ] as const;
 
 const NAV_SECTION_TPO_STAFF = [
-  { label: 'Faculty', icon: Users, path: '/tpo/faculty', end: false },
-  { label: 'Candidates', icon: Users2, path: '/tpo/candidates', end: false },
+  { label: 'Trainers', icon: Users, path: '/tpo/faculty', end: false },
+  { label: 'Students', icon: Users2, path: '/tpo/candidates', end: false },
 ] as const;
 
 const NAV_SECTION_TPO_TESTS = [
@@ -66,7 +66,7 @@ const NAV_SECTIONS_TPO = [
   { title: 'Approvals', items: NAV_SECTION_TPO_APPROVALS },
   { title: 'Academics', items: NAV_SECTION_TPO_ACADEMICS },
   { title: 'Assessment', items: NAV_SECTION_TPO_TESTS },
-  { title: 'Staff & Candidates', items: NAV_SECTION_TPO_STAFF },
+  { title: 'Staff & Students', items: NAV_SECTION_TPO_STAFF },
 ] as const;
 
 const NAV_ITEMS_CANDIDATE = [
@@ -82,9 +82,9 @@ const NAV_ITEMS_CANDIDATE = [
 ] as const;
 
 const ROLE_LABEL: Record<string, string> = {
-  faculty: 'Faculty',
+  faculty: 'Trainer',
   tpo: 'TPO',
-  candidate: 'Candidate',
+  candidate: 'Student',
 };
 
 interface SidebarProps {
@@ -153,14 +153,14 @@ export const Sidebar = ({ isOpen, onClose, overlayOnDesktop }: SidebarProps) => 
           </>
         ) : isCandidate ? (
           <>
-            <p className="px-3 pb-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Candidate Portal</p>
+            <p className="px-3 pb-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Student Portal</p>
             {NAV_ITEMS_CANDIDATE.map((item) => (
               <SidebarNavItem key={item.path} to={item.path} icon={item.icon} label={item.label} end={item.end} />
             ))}
           </>
         ) : (
           <>
-            <p className="px-3 pb-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Faculty Portal</p>
+            <p className="px-3 pb-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Trainer Portal</p>
             {NAV_ITEMS_FACULTY.map((item) => (
               <SidebarNavItem key={item.path} to={item.path} icon={item.icon} label={item.label} end={item.end} />
             ))}

@@ -13,6 +13,11 @@ export const createCandidateSchema = z.object({
 
 export const updateCandidateSchema = createCandidateSchema.partial();
 
+export const createLoginSchema = z.object({
+  loginEmail: z.string().email('Enter a valid email address').toLowerCase(),
+  password: z.string().min(8, 'Password must be at least 8 characters'),
+});
+
 export const listCandidateSchema = z.object({
   page: z.coerce.number().int().min(1).optional(),
   limit: z.coerce.number().int().min(1).max(200).optional(),

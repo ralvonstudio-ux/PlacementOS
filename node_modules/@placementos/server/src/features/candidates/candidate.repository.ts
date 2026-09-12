@@ -29,6 +29,10 @@ export const candidateRepository = {
     return Candidate.findOne({ rollNumber, instituteId, isDeleted: false });
   },
 
+  async findByLoginEmail(loginEmail: string, instituteId: string): Promise<ICandidate | null> {
+    return Candidate.findOne({ loginEmail, instituteId, isDeleted: false }).lean<ICandidate>();
+  },
+
   async findAll(instituteId: string, options: FindCandidateOptions = {}): Promise<PaginatedCandidates> {
     const { page = 1, limit = 20, search, batch, department, placementYear, status } = options;
     const skip = (page - 1) * limit;
@@ -56,6 +60,12 @@ export const candidateRepository = {
   /** All candidates in a batch — used by attendance's bulk-mark flow to build a roster. */
   async findByBatch(instituteId: string, batch: string): Promise<ICandidate[]> {
     return Candidate.find({ instituteId, batch, isDeleted: false }).lean<ICandidate[]>();
+  },
+
+  /** Minimal lookup for a known set of ids — backs name-resolution in reports (e.g. test attempt review). */
+  async findAllForSchoolByIds(ids: string[], instituteId: string): Promise<ICandidate[]> {
+    if (ids.length === 0) return [];
+    return Candidate.find({ _id: { $in: ids }, instituteId }).select('fullName rollNumber batch').lean<ICandidate[]>();
   },
 
   async update(id: string, instituteId: string, data: Partial<ICandidate>): Promise<ICandidate | null> {

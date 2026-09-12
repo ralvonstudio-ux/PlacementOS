@@ -8,6 +8,8 @@ import { NotFound } from '@/pages/NotFound';
 import { Forbidden } from '@/pages/Forbidden';
 import { Unauthorized } from '@/pages/Unauthorized';
 import { Outlet } from 'react-router-dom';
+import { useAuth } from '@/features/auth/hooks/useAuth';
+import { getHomePathForRole } from '@/features/auth/utils/roleHome';
 
 // ── Faculty pages ──────────────────────────────────────────────────────────
 const FacultyDashboardPage = lazy(() => import('@/features/faculty-workspace/pages/FacultyDashboardPage').then((m) => ({ default: m.FacultyDashboardPage })));
@@ -30,6 +32,20 @@ const TpoFacultyPage = lazy(() => import('@/features/tpo/pages/TpoFacultyPage').
 const TpoLeaveApprovalsPage = lazy(() => import('@/features/leave-requests/pages/TpoLeaveApprovalsPage').then((m) => ({ default: m.TpoLeaveApprovalsPage })));
 const TpoTrainingPlanOverviewPage = lazy(() => import('@/features/training-plan/pages/TpoTrainingPlanOverviewPage').then((m) => ({ default: m.TpoTrainingPlanOverviewPage })));
 const TpoQuestionBankOverviewPage = lazy(() => import('@/features/question-bank/pages/TpoQuestionBankOverviewPage').then((m) => ({ default: m.TpoQuestionBankOverviewPage })));
+const TpoCandidatesPage = lazy(() => import('@/features/candidates/pages/TpoCandidatesPage').then((m) => ({ default: m.TpoCandidatesPage })));
+const TpoPracticeLibraryPage = lazy(() => import('@/features/practice/pages/TpoPracticeLibraryPage').then((m) => ({ default: m.TpoPracticeLibraryPage })));
+const TpoTestsPage = lazy(() => import('@/features/tests/pages/TpoTestsPage').then((m) => ({ default: m.TpoTestsPage })));
+const TestBuilderPage = lazy(() => import('@/features/tests/pages/TestBuilderPage').then((m) => ({ default: m.TestBuilderPage })));
+const TestReviewPage = lazy(() => import('@/features/tests/pages/TestReviewPage').then((m) => ({ default: m.TestReviewPage })));
+
+// ── Candidate pages ──────────────────────────────────────────────────────────
+const CandidateDashboardPage = lazy(() => import('@/features/candidate-profile/pages/CandidateDashboardPage').then((m) => ({ default: m.CandidateDashboardPage })));
+const ResumeBuilderPage = lazy(() => import('@/features/candidate-profile/pages/ResumeBuilderPage').then((m) => ({ default: m.ResumeBuilderPage })));
+const LeetCodeProfilePage = lazy(() => import('@/features/candidate-profile/pages/LeetCodeProfilePage').then((m) => ({ default: m.LeetCodeProfilePage })));
+const PracticeBrowsePage = lazy(() => import('@/features/practice/pages/PracticeBrowsePage').then((m) => ({ default: m.PracticeBrowsePage })));
+const CandidatePracticeSheetsPage = lazy(() => import('@/features/practice/pages/CandidatePracticeSheetsPage').then((m) => ({ default: m.CandidatePracticeSheetsPage })));
+const TestListPage = lazy(() => import('@/features/tests/pages/TestListPage').then((m) => ({ default: m.TestListPage })));
+const TestTakingPage = lazy(() => import('@/features/tests/pages/TestTakingPage').then((m) => ({ default: m.TestTakingPage })));
 
 // ── Shared ─────────────────────────────────────────────────────────────────
 const SettingsPage = lazy(() => import('@/features/auth/pages/SettingsPage').then((m) => ({ default: m.SettingsPage })));
@@ -42,6 +58,13 @@ function RootLayout() {
       <Outlet />
     </AuthProvider>
   );
+}
+
+/** Sends "/" to whichever workspace actually matches the logged-in user's role, instead of
+ *  hardcoding one role and letting everyone else bounce off a role-gated route into Forbidden. */
+function RoleHomeRedirect() {
+  const { user } = useAuth();
+  return <Navigate to={user ? getHomePathForRole(user.role) : '/login'} replace />;
 }
 
 export const router = createBrowserRouter([
@@ -58,7 +81,7 @@ export const router = createBrowserRouter([
           {
             element: <AppLayout />,
             children: [
-              { index: true, element: <Navigate to="/faculty" replace /> },
+              { index: true, element: <RoleHomeRedirect /> },
 
               {
                 path: 'faculty',
@@ -89,6 +112,24 @@ export const router = createBrowserRouter([
                   { path: 'training-plan', element: <TpoTrainingPlanOverviewPage /> },
                   { path: 'question-bank-overview', element: <TpoQuestionBankOverviewPage /> },
                   { path: 'faculty', element: <TpoFacultyPage /> },
+                  { path: 'candidates', element: <TpoCandidatesPage /> },
+                  { path: 'practice', element: <TpoPracticeLibraryPage /> },
+                  { path: 'tests', element: <TpoTestsPage /> },
+                  { path: 'tests/new', element: <TestBuilderPage /> },
+                  { path: 'tests/:id/review', element: <TestReviewPage /> },
+                ],
+              },
+
+              {
+                path: 'candidate',
+                element: <ProtectedRoute allowedRoles={['candidate']} />,
+                children: [
+                  { index: true, element: <CandidateDashboardPage /> },
+                  { path: 'resume', element: <ResumeBuilderPage /> },
+                  { path: 'leetcode', element: <LeetCodeProfilePage /> },
+                  { path: 'practice/:category', element: <PracticeBrowsePage /> },
+                  { path: 'practice-sheets', element: <CandidatePracticeSheetsPage /> },
+                  { path: 'tests', element: <TestListPage /> },
                 ],
               },
 
@@ -97,6 +138,13 @@ export const router = createBrowserRouter([
             ],
           },
         ],
+      },
+
+      // Rendered outside AppLayout, deliberately without sidebar/topbar chrome — the proctored
+      // test-taking screen owns the entire viewport for the duration of the attempt.
+      {
+        element: <ProtectedRoute allowedRoles={['candidate']} />,
+        children: [{ path: 'candidate/tests/:testId/attempt', element: <TestTakingPage /> }],
       },
 
       { path: '*', element: <NotFound /> },

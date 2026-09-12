@@ -24,7 +24,7 @@ export function TpoQuestionBankOverviewPage() {
               <tr className="border-b border-gray-100 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
                 <th className="px-5 py-3">Batch</th>
                 <th className="px-5 py-3">Track</th>
-                <th className="px-5 py-3">Faculty</th>
+                <th className="px-5 py-3">Trainer</th>
                 <th className="px-5 py-3 text-right">Questions</th>
                 <th className="px-5 py-3 text-right">Papers</th>
                 <th className="px-5 py-3 text-right">Last Activity</th>

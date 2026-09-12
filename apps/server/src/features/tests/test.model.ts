@@ -62,7 +62,28 @@ testSchema.index({ instituteId: 1, isDeleted: 1, batch: 1, status: 1 });
 export const Test = mongoose.model<ITest>('Test', testSchema);
 
 export type TestAttemptStatus = 'in_progress' | 'submitted';
-export type TestViolationType = 'tab_switch' | 'window_blur' | 'fullscreen_exit' | 'copy_paste' | 'right_click' | 'devtools' | 'no_face';
+export type TestViolationType =
+  | 'tab_switch'
+  | 'window_blur'
+  | 'fullscreen_exit'
+  | 'copy_paste'
+  | 'right_click'
+  | 'devtools'
+  | 'no_face'
+  | 'screen_share_stopped'
+  | 'extension_detected';
+
+const TEST_VIOLATION_TYPES = [
+  'tab_switch',
+  'window_blur',
+  'fullscreen_exit',
+  'copy_paste',
+  'right_click',
+  'devtools',
+  'no_face',
+  'screen_share_stopped',
+  'extension_detected',
+] as const;
 
 export interface ITestViolation {
   type: TestViolationType;
@@ -92,7 +113,7 @@ export interface ITestAttempt extends Document {
 }
 
 const violationSchema = new Schema<ITestViolation>(
-  { type: { type: String, enum: ['tab_switch', 'window_blur', 'fullscreen_exit', 'copy_paste', 'right_click', 'devtools', 'no_face'], required: true }, at: { type: Date, required: true }, detail: { type: String, trim: true } },
+  { type: { type: String, enum: TEST_VIOLATION_TYPES, required: true }, at: { type: Date, required: true }, detail: { type: String, trim: true } },
   { _id: false }
 );
 

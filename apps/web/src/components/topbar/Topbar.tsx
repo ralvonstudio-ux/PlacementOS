@@ -5,9 +5,9 @@ import { cn } from '@/lib/utils';
 import { useAuth } from '@/features/auth/hooks/useAuth';
 
 const WORKSPACE_LABELS: Record<string, string> = {
-  '/faculty': 'Faculty Workspace',
+  '/faculty': 'Trainer Workspace',
   '/tpo': 'TPO Dashboard',
-  '/candidate': 'Candidate Portal',
+  '/candidate': 'Student Portal',
   '/settings': 'Settings',
 };
 
@@ -96,7 +96,7 @@ export const Topbar = ({ onMenuToggle }: TopbarProps) => {
   const location = useLocation();
   const { user } = useAuth();
 
-  const ROLE_LABELS: Record<string, string> = { faculty: 'Faculty', tpo: 'TPO', candidate: 'Candidate' };
+  const ROLE_LABELS: Record<string, string> = { faculty: 'Trainer', tpo: 'TPO', candidate: 'Student' };
 
   const section = getLabel(location.pathname);
   const now = useNow();

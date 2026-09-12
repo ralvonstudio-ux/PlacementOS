@@ -1362,7 +1362,16 @@ export interface TestForCandidate {
 }
 
 export type TestAttemptStatus = 'in_progress' | 'submitted';
-export type TestViolationType = 'tab_switch' | 'window_blur' | 'fullscreen_exit' | 'copy_paste' | 'right_click' | 'devtools' | 'no_face';
+export type TestViolationType =
+  | 'tab_switch'
+  | 'window_blur'
+  | 'fullscreen_exit'
+  | 'copy_paste'
+  | 'right_click'
+  | 'devtools'
+  | 'no_face'
+  | 'screen_share_stopped'
+  | 'extension_detected';
 
 export interface TestViolation {
   type: TestViolationType;

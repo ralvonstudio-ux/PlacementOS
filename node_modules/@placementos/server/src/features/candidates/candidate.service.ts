@@ -1,8 +1,26 @@
+import bcrypt from 'bcrypt';
 import { candidateRepository, FindCandidateOptions, PaginatedCandidates } from './candidate.repository';
-import { createCandidateSchema, updateCandidateSchema } from './candidate.validation';
-import { NotFoundError, ValidationError } from '../../middlewares/errorHandler';
+import { createCandidateSchema, updateCandidateSchema, createLoginSchema } from './candidate.validation';
+import { ForbiddenError, NotFoundError, ValidationError } from '../../middlewares/errorHandler';
 import { ICandidate } from './candidate.model';
 import { AuthContext } from '../../lib/auth-context';
+import { userRepository } from '../users/user.repository';
+import { User } from '../users/user.model';
+
+const SALT_ROUNDS = 12;
+
+/** Resolves the Candidate record linked to the logged-in user's account, by loginEmail —
+ *  mirrors resolveFacultyId in training-schedule.service.ts. Used by every candidate-portal
+ *  feature (profile, practice progress, tests) to turn a User id into a Candidate id. */
+export async function resolveCandidateId(ctx: AuthContext): Promise<string> {
+  const user = (await User.findById(ctx.userId).select('email').lean()) as { email?: string } | null;
+  if (!user?.email) throw new ForbiddenError('Your account has no email — cannot verify candidate profile');
+
+  const candidate = await candidateRepository.findByLoginEmail(user.email, ctx.instituteId);
+  if (!candidate) throw new ForbiddenError('Candidate profile not found');
+
+  return String((candidate as unknown as { _id: { toString(): string } })._id);
+}
 
 export const candidateService = {
   async list(instituteId: string, options: FindCandidateOptions = {}): Promise<PaginatedCandidates> {
@@ -38,5 +56,31 @@ export const candidateService = {
   async remove(id: string, ctx: AuthContext): Promise<void> {
     const deleted = await candidateRepository.softDelete(id, ctx.instituteId, ctx.userId);
     if (!deleted) throw new NotFoundError('Candidate');
+  },
+
+  /** Creates a login (User account, role 'candidate') linked to this Candidate
+   *  record by loginEmail — mirrors faculty.service.ts's createLogin. */
+  async createLogin(id: string, rawInput: unknown, ctx: AuthContext): Promise<{ email: string }> {
+    const { loginEmail, password } = createLoginSchema.parse(rawInput);
+    const candidate = await candidateRepository.findById(id, ctx.instituteId);
+    if (!candidate) throw new NotFoundError('Candidate');
+
+    const existingUser = await userRepository.findByEmail(loginEmail);
+    if (existingUser) throw new ValidationError('A user with this login email already exists');
+
+    const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
+    await userRepository.create({
+      firstName: candidate.fullName.split(' ')[0] || candidate.fullName,
+      lastName: candidate.fullName.split(' ').slice(1).join(' ') || candidate.fullName,
+      email: loginEmail,
+      passwordHash,
+      role: 'candidate',
+      instituteId: ctx.instituteId,
+      createdBy: ctx.userId,
+    });
+
+    await candidateRepository.update(id, ctx.instituteId, { loginEmail, updatedBy: ctx.userId });
+
+    return { email: loginEmail };
   },
 };

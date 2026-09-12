@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
-import { candidatesApi } from '../api/candidates.api';
+import { candidatesApi } from '@/features/candidates/api/candidates.api';
 import { BulkAttendanceForm } from '../components/BulkAttendanceForm';
 
 function todayStr() {

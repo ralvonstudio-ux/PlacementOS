@@ -26,11 +26,11 @@ export function TpoCandidatesPage() {
   return (
     <PageContainer>
       <WorkspaceHeader
-        title="Candidates"
+        title="Students"
         subtitle="Roster, batch assignment, and portal logins"
         action={
           <button onClick={() => setShowAdd(true)} className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-violet-600 hover:bg-violet-700 text-sm font-semibold text-white transition-colors">
-            <Plus className="w-4 h-4" /> Add Candidate
+            <Plus className="w-4 h-4" /> Add Student
           </button>
         }
       />
@@ -44,7 +44,7 @@ export function TpoCandidatesPage() {
         {isLoading ? (
           <div className="p-5 space-y-3 animate-pulse">{[1, 2, 3, 4].map((i) => <div key={i} className="h-14 bg-gray-100 rounded-xl" />)}</div>
         ) : candidates.length === 0 ? (
-          <EmptyState icon={Users2} title="No candidates found" description="Add your first candidate to get started." action={{ label: 'Add Candidate', onClick: () => setShowAdd(true) }} />
+          <EmptyState icon={Users2} title="No students found" description="Add your first student to get started." action={{ label: 'Add Student', onClick: () => setShowAdd(true) }} />
         ) : (
           <div className="divide-y divide-gray-50">
             {candidates.map((c) => (

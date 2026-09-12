@@ -34,7 +34,7 @@ export function TpoTrainingPlanOverviewPage() {
         </div>
       )}
 
-      <SectionTitle>By Faculty</SectionTitle>
+      <SectionTitle>By Trainer</SectionTitle>
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
         {isLoading ? (
           <div className="p-5 space-y-3 animate-pulse">
@@ -46,7 +46,7 @@ export function TpoTrainingPlanOverviewPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                <th className="px-5 py-3">Faculty</th>
+                <th className="px-5 py-3">Trainer</th>
                 <th className="px-5 py-3">Batch</th>
                 <th className="px-5 py-3">Track</th>
                 <th className="px-5 py-3 text-right">Progress</th>

@@ -11,7 +11,7 @@ export function TpoFacultyPage() {
 
   return (
     <PageContainer>
-      <WorkspaceHeader title="Faculty" subtitle="Every faculty member in your institute" />
+      <WorkspaceHeader title="Trainers" subtitle="Every trainer in your institute" />
 
       <div className="mb-5 relative max-w-sm">
         <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -19,7 +19,7 @@ export function TpoFacultyPage() {
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search faculty by name or employee ID"
+          placeholder="Search trainers by name or employee ID"
           className="w-full h-10 pl-10 pr-4 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-500"
         />
       </div>
@@ -30,7 +30,7 @@ export function TpoFacultyPage() {
             {[1, 2, 3, 4].map((i) => <div key={i} className="h-14 bg-gray-100 rounded-xl" />)}
           </div>
         ) : faculty.length === 0 ? (
-          <EmptyState icon={Users} title="No faculty found" description="Try a different search." />
+          <EmptyState icon={Users} title="No trainers found" description="Try a different search." />
         ) : (
           <div className="divide-y divide-gray-50">
             {faculty.map((f) => (

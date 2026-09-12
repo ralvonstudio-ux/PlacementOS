@@ -1,3 +1,4 @@
+import { startTransition } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ShieldCheck, PlayCircle, CheckCircle2 } from 'lucide-react';
 import { PageContainer } from '@/components/workspace/PageContainer';
@@ -38,7 +39,7 @@ export function TestListPage() {
               <p className="text-xs text-amber-600 mt-3">Violation limit: {t.violationLimit} — exceeding it auto-submits your attempt.</p>
 
               <button
-                onClick={() => navigate(`/candidate/tests/${t._id}/attempt`)}
+                onClick={() => startTransition(() => navigate(`/candidate/tests/${t._id}/attempt`))}
                 disabled={t.attemptStatus === 'submitted'}
                 className="mt-4 inline-flex items-center justify-center gap-2 h-10 rounded-xl bg-violet-600 hover:bg-violet-700 text-sm font-semibold text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
