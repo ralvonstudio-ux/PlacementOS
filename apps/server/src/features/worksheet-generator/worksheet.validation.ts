@@ -1,0 +1,74 @@
+import { z } from 'zod';
+
+export const WORKSHEET_TYPES = ['practice', 'homework', 'revision', 'hots', 'olympiad', 'remedial'] as const;
+export const QUESTION_TYPES = [
+  'mcq', 'fill_blank', 'true_false', 'assertion_reason', 'very_short', 'short', 'long', 'hots', 'case_study',
+  'multi_correct', 'match_following', 'one_word', 'competency_based', 'application_based', 'activity_based',
+  'observation_based', 'diagram_based', 'picture_based', 'label_diagram', 'complete_diagram', 'numerical',
+  'word_problem', 'oral', 'revision', 'sequence_arrangement', 'odd_one_out', 'passage_based',
+] as const;
+export const DIFFICULTIES = ['easy', 'medium', 'hard'] as const;
+
+export const generateWorksheetSchema = z.object({
+  batch: z.string({ required_error: 'batch is required' }).min(1).trim(),
+  track: z.string({ required_error: 'track is required' }).min(1).trim(),
+  trainingModuleIds: z.array(z.string()).min(1, 'Select at least one training module'),
+  worksheetType: z.enum(WORKSHEET_TYPES),
+  questionCount: z.number().int().min(1).max(50),
+  topicIds: z.array(z.string()).optional(),
+  languageComplexity: z.enum(['auto', 'simple', 'standard', 'advanced']).default('auto'),
+  includeImages: z.boolean().default(false),
+});
+
+const imageRefSchema = z.object({ sourceId: z.string(), figureId: z.string() });
+const imageRequirementSchema = z.object({
+  imageRequired: z.literal(true),
+  imageSource: z.enum(['generated', 'faculty_upload']),
+  imagePrompt: z.string().optional(),
+});
+
+const worksheetQuestionSchema = z.object({
+  questionId: z.string().optional(),
+  questionText: z.string().min(1),
+  questionType: z.enum(QUESTION_TYPES),
+  options: z.array(z.string()).nullable().optional(),
+  difficulty: z.enum(DIFFICULTIES),
+  estimatedTimeMinutes: z.number().min(0),
+  keywords: z.array(z.string()).default([]),
+  isNew: z.boolean().optional(),
+  imageRef: imageRefSchema.optional(),
+  imageRequirement: imageRequirementSchema.optional(),
+});
+
+export const saveWorksheetSchema = z.object({
+  batch: z.string({ required_error: 'batch is required' }).min(1).trim(),
+  track: z.string({ required_error: 'track is required' }).min(1).trim(),
+  trainingModuleIds: z.array(z.string()).min(1, 'Select at least one training module'),
+  worksheetType: z.enum(WORKSHEET_TYPES),
+  title: z.string({ required_error: 'title is required' }).min(1).trim(),
+  questions: z.array(worksheetQuestionSchema).min(1, 'At least one question is required'),
+  addNewToBank: z.boolean().default(true),
+});
+
+export const listWorksheetsSchema = z.object({
+  batch: z.string().optional(),
+  track: z.string().optional(),
+  trainingModuleId: z.string().optional(),
+  worksheetType: z.enum(WORKSHEET_TYPES).optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+});
+
+export const updateWorksheetSchema = z.object({
+  title: z.string().min(1).trim().optional(),
+  questions: z.array(z.object({
+    questionText: z.string().min(1),
+    difficulty: z.enum(DIFFICULTIES),
+    estimatedTimeMinutes: z.number().min(0),
+  })).optional(),
+});
+
+export type GenerateWorksheetInput = z.infer<typeof generateWorksheetSchema>;
+export type SaveWorksheetInput = z.infer<typeof saveWorksheetSchema>;
+export type ListWorksheetsInput = z.infer<typeof listWorksheetsSchema>;
+export type UpdateWorksheetInput = z.infer<typeof updateWorksheetSchema>;
