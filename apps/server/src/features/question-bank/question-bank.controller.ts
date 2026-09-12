@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import type { PaperGenerationConfig } from '@placementos/types';
 import { buildAuthContext } from '../../lib/auth-context';
 import { fileToDataUri } from '../../lib/image-upload';
 import { sendSuccess, sendCreated, sendPaginated } from '../../lib/response';
@@ -187,7 +188,14 @@ export const questionBankController = {
     try {
       const data = deleteQuestionGroupsSchema.parse(req.body);
       const ctx = buildAuthContext(req.user!);
-      const count = await questionBankService.deleteQuestionGroups(data.groups, ctx);
+      // zod guarantees these fields are present (the schema declares them required with
+      // custom required_error messages) — the cast works around a TS-inference quirk seen
+      // only in Vercel's isolated build, where this file's zod-inferred types come back
+      // with every field marked optional despite nothing in the schema being .optional().
+      const count = await questionBankService.deleteQuestionGroups(
+        data.groups as { batch: string; track: string; trainingModuleId: string }[],
+        ctx
+      );
       sendSuccess(res, null, `${count} question(s) deleted`);
     } catch (err) { next(err); }
   },
@@ -197,7 +205,12 @@ export const questionBankController = {
     try {
       const data = mergeQuestionGroupsSchema.parse(req.body);
       const ctx = buildAuthContext(req.user!);
-      const count = await questionBankService.mergeQuestionGroups(data.groups, data.targetModuleName, ctx);
+      // See the same-shaped cast in deleteQuestionGroups above for why this is needed.
+      const count = await questionBankService.mergeQuestionGroups(
+        data.groups as { batch: string; track: string; trainingModuleId: string; trainingModuleName: string }[],
+        data.targetModuleName,
+        ctx
+      );
       sendSuccess(res, { modified: count }, 'Training modules merged');
     } catch (err) { next(err); }
   },
@@ -245,7 +258,8 @@ export const questionBankController = {
     try {
       const config = paperGenerationConfigSchema.parse(req.body);
       const ctx = buildAuthContext(req.user!);
-      const paper = await paperGeneratorService.generate(config, ctx);
+      // See the same-shaped cast in deleteQuestionGroups above for why this is needed.
+      const paper = await paperGeneratorService.generate(config as PaperGenerationConfig, ctx);
       sendCreated(res, paper, 'Paper generated');
     } catch (err) { next(err); }
   },
