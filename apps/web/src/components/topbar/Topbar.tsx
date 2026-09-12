@@ -7,6 +7,7 @@ import { useAuth } from '@/features/auth/hooks/useAuth';
 const WORKSPACE_LABELS: Record<string, string> = {
   '/faculty': 'Faculty Workspace',
   '/tpo': 'TPO Dashboard',
+  '/candidate': 'Candidate Portal',
   '/settings': 'Settings',
 };
 
@@ -95,7 +96,7 @@ export const Topbar = ({ onMenuToggle }: TopbarProps) => {
   const location = useLocation();
   const { user } = useAuth();
 
-  const ROLE_LABELS: Record<string, string> = { faculty: 'Faculty', tpo: 'TPO' };
+  const ROLE_LABELS: Record<string, string> = { faculty: 'Faculty', tpo: 'TPO', candidate: 'Candidate' };
 
   const section = getLabel(location.pathname);
   const now = useNow();

@@ -53,4 +53,14 @@ export const candidateController = {
       next(err);
     }
   },
+
+  async createLogin(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const ctx = buildAuthContext(req.user!, req.ip ?? undefined);
+      const result = await candidateService.createLogin(req.params.id, req.body, ctx);
+      sendCreated(res, result, 'Login created successfully');
+    } catch (err) {
+      next(err);
+    }
+  },
 };

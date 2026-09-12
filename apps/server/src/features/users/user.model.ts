@@ -34,7 +34,7 @@ const userSchema = new Schema<IUser>(
     passwordHash: { type: String, required: true },
     role: {
       type: String,
-      enum: ['admin', 'tpo', 'faculty'],
+      enum: ['admin', 'tpo', 'faculty', 'candidate'],
       required: true,
     },
     status: { type: String, enum: ['active', 'inactive', 'suspended'], default: 'active' },

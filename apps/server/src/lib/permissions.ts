@@ -17,6 +17,11 @@ export const PERMISSIONS = {
   QUESTION_BANK_VIEW: 'question-bank.view',
   WORKSHEET_GENERATE: 'worksheet.generate',
   TPO_OVERVIEW_VIEW: 'tpo.overview.view',
+  RESUME_MANAGE: 'resume.manage',
+  PRACTICE_VIEW: 'practice.view',
+  PRACTICE_MANAGE: 'practice.manage',
+  TEST_TAKE: 'test.take',
+  TEST_MANAGE: 'test.manage',
 } as const;
 
 export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -33,6 +38,13 @@ export const ROLE_PERMISSIONS: Record<UserRole, readonly Permission[]> = {
     PERMISSIONS.QUESTION_BANK_MANAGE,
     PERMISSIONS.QUESTION_BANK_VIEW,
     PERMISSIONS.WORKSHEET_GENERATE,
+    PERMISSIONS.PRACTICE_MANAGE,
+    PERMISSIONS.TEST_MANAGE,
+  ],
+  candidate: [
+    PERMISSIONS.RESUME_MANAGE,
+    PERMISSIONS.PRACTICE_VIEW,
+    PERMISSIONS.TEST_TAKE,
   ],
 };
 
@@ -40,6 +52,7 @@ export const ROLE_META: Record<UserRole, { label: string; description: string }>
   admin: { label: 'Administrator', description: 'Full access to all system features' },
   tpo: { label: 'Training & Placement Officer', description: 'Institute-wide oversight — training schedule, attendance, leave approvals, and staff' },
   faculty: { label: 'Faculty', description: 'Manage assigned batches — attendance, training plan, question bank, worksheets' },
+  candidate: { label: 'Candidate', description: 'Resume, interview/aptitude practice, and proctored tests' },
 };
 
 export const PERMISSION_META: Record<Permission, { label: string; category: string }> = {
@@ -59,6 +72,11 @@ export const PERMISSION_META: Record<Permission, { label: string; category: stri
   [PERMISSIONS.QUESTION_BANK_VIEW]: { label: 'View question bank', category: 'Question Bank' },
   [PERMISSIONS.WORKSHEET_GENERATE]: { label: 'Generate worksheets', category: 'Worksheet Generator' },
   [PERMISSIONS.TPO_OVERVIEW_VIEW]: { label: 'View TPO overview', category: 'TPO' },
+  [PERMISSIONS.RESUME_MANAGE]: { label: 'Manage own resume', category: 'Candidate Portal' },
+  [PERMISSIONS.PRACTICE_VIEW]: { label: 'View practice library', category: 'Candidate Portal' },
+  [PERMISSIONS.PRACTICE_MANAGE]: { label: 'Manage practice library', category: 'Candidate Portal' },
+  [PERMISSIONS.TEST_TAKE]: { label: 'Take a proctored test', category: 'Candidate Portal' },
+  [PERMISSIONS.TEST_MANAGE]: { label: 'Create and review proctored tests', category: 'Candidate Portal' },
 };
 
 export const hasPermission = (role: UserRole, permission: Permission): boolean =>

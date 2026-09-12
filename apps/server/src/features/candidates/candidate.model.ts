@@ -12,6 +12,8 @@ export interface ICandidate extends Document {
   phone?: string;
   placementYear: string;
   status: CandidateStatus;
+  /** Admin/TPO-issued login address — separate from `email`, mirrors Faculty.loginEmail. */
+  loginEmail?: string;
   isDeleted: boolean;
   deletedAt?: Date;
   deletedBy?: string;
@@ -34,6 +36,7 @@ const candidateSchema = new Schema<ICandidate>(
     phone: { type: String, trim: true },
     placementYear: { type: String, required: true, trim: true },
     status: { type: String, enum: CANDIDATE_STATUSES, default: 'active' },
+    loginEmail: { type: String, trim: true, lowercase: true },
     isDeleted: { type: Boolean, default: false },
     deletedAt: { type: Date },
     deletedBy: { type: String },
@@ -48,5 +51,6 @@ candidateSchema.index({ instituteId: 1, isDeleted: 1, batch: 1 });
 candidateSchema.index({ instituteId: 1, isDeleted: 1, department: 1 });
 candidateSchema.index({ instituteId: 1, isDeleted: 1, placementYear: 1 });
 candidateSchema.index({ instituteId: 1, isDeleted: 1, status: 1 });
+candidateSchema.index({ instituteId: 1, loginEmail: 1 }, { unique: true, sparse: true });
 
 export const Candidate = mongoose.model<ICandidate>('Candidate', candidateSchema);

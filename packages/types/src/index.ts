@@ -1,7 +1,7 @@
 // @placementos/types — shared type definitions for PlacementOS
 // Mirrors @schoolos/types conventions: always use `_id` for entity ids.
 
-export type UserRole = 'admin' | 'tpo' | 'faculty';
+export type UserRole = 'admin' | 'tpo' | 'faculty' | 'candidate';
 
 export const INTERNAL_INSTITUTE_ID = 'INTERNAL';
 export type UserStatus = 'active' | 'inactive' | 'suspended';
@@ -72,8 +72,15 @@ export interface Candidate {
   phone?: string;
   placementYear: string;
   status: 'active' | 'inactive' | 'placed';
+  /** Admin/TPO-issued login address — separate from `email`, mirrors Faculty.loginEmail. */
+  loginEmail?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface CreateCandidateLoginPayload {
+  loginEmail: string;
+  password: string;
 }
 
 // ── Attendance ────────────────────────────────────────────────────────────
@@ -1130,4 +1137,288 @@ export interface TrainingPlanAlert {
   severity: TrainingPlanAlertSeverity;
   message: string;
   createdAt: string;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ── Candidate Portal ─────────────────────────────────────────────────────
+// Everything below backs the candidate-facing (student) side of the app:
+// resume, interview/aptitude practice, company-tagged prep, proctored tests,
+// and a read-only LeetCode stats pull. Kept as its own dedicated content
+// model (PracticeQuestion/PracticeSheet) rather than retrofitted onto the
+// faculty-authored BankQuestion/Worksheet machinery — the two serve
+// different authors and different integrity requirements (a candidate must
+// never be able to see a Test's answer key, whereas the question bank's
+// AI-extraction/paper-generation pipeline has no such constraint).
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ── Resume / Candidate Profile ────────────────────────────────────────────
+
+export interface ResumeEducationEntry {
+  degree: string;
+  institution: string;
+  year: string;
+  score?: string;
+}
+
+export interface ResumeExperienceEntry {
+  company: string;
+  role: string;
+  duration: string;
+  description?: string;
+}
+
+export interface ResumeProjectEntry {
+  title: string;
+  description?: string;
+  techStack: string[];
+  link?: string;
+}
+
+export interface ResumeLinks {
+  github?: string;
+  linkedin?: string;
+  portfolio?: string;
+}
+
+export interface CandidateProfile {
+  _id: string;
+  instituteId: string;
+  candidateId: string;
+  headline?: string;
+  summary?: string;
+  education: ResumeEducationEntry[];
+  experience: ResumeExperienceEntry[];
+  projects: ResumeProjectEntry[];
+  skills: string[];
+  links: ResumeLinks;
+  leetcodeUsername?: string;
+  resumeFileUrl?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type SaveCandidateProfilePayload = Partial<Omit<CandidateProfile, '_id' | 'instituteId' | 'candidateId' | 'createdAt' | 'updatedAt' | 'resumeFileUrl'>>;
+
+export interface LeetCodeBadge {
+  id: string;
+  name: string;
+  /** Absolute URL — relative LeetCode paths are resolved server-side. */
+  iconUrl: string;
+}
+
+export interface LeetCodeStats {
+  username: string;
+  ranking?: number;
+  totalSolved: number;
+  totalQuestions: number;
+  easySolved: number;
+  easyTotal: number;
+  mediumSolved: number;
+  mediumTotal: number;
+  hardSolved: number;
+  hardTotal: number;
+  badgeCount: number;
+  /** Best-effort — LeetCode's public API doesn't label which badge is most recent, so this is badges[0]. */
+  recentBadge?: LeetCodeBadge;
+  /** Day-start unix seconds (as string) → submission count, for the current LeetCode calendar year. */
+  submissionCalendar: Record<string, number>;
+  totalActiveDays: number;
+  /** Longest run of consecutive active days found within the returned calendar window (not all-time). */
+  maxStreak: number;
+  fetchedAt: string;
+}
+
+// ── Practice Library (PI / GD / Aptitude / Reasoning / Company) ──────────
+
+export type PracticeCategory = 'aptitude' | 'reasoning' | 'pi' | 'gd' | 'company';
+export type PracticeQuestionType = 'mcq' | 'open_ended';
+export type PracticeDifficulty = 'easy' | 'medium' | 'hard';
+
+export interface PracticeQuestion {
+  _id: string;
+  instituteId: string;
+  category: PracticeCategory;
+  /** Set when category is 'company' — e.g. "TCS", "Infosys", "Google". */
+  companyName?: string;
+  questionText: string;
+  questionType: PracticeQuestionType;
+  options?: string[];
+  correctAnswer?: string;
+  explanation?: string;
+  /** Talking points for open-ended PI/GD prep — never "graded", just guidance. */
+  guidancePoints?: string[];
+  difficulty?: PracticeDifficulty;
+  tags: string[];
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreatePracticeQuestionPayload {
+  category: PracticeCategory;
+  companyName?: string;
+  questionText: string;
+  questionType: PracticeQuestionType;
+  options?: string[];
+  correctAnswer?: string;
+  explanation?: string;
+  guidancePoints?: string[];
+  difficulty?: PracticeDifficulty;
+  tags?: string[];
+}
+
+export type UpdatePracticeQuestionPayload = Partial<CreatePracticeQuestionPayload>;
+
+export interface PracticeQuestionListOptions {
+  category?: PracticeCategory;
+  companyName?: string;
+  difficulty?: PracticeDifficulty;
+  search?: string;
+  page?: number;
+  limit?: number;
+}
+
+/** Distinct company names in use — backs the company-filter chip list. */
+export interface PracticeCompanyList {
+  companies: string[];
+}
+
+export interface PracticeSheet {
+  _id: string;
+  instituteId: string;
+  title: string;
+  batch: string;
+  category: PracticeCategory;
+  questionIds: string[];
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreatePracticeSheetPayload {
+  title: string;
+  batch: string;
+  category: PracticeCategory;
+  questionIds: string[];
+}
+
+// ── Proctored Tests ────────────────────────────────────────────────────────
+
+export type TestStatus = 'draft' | 'published' | 'closed';
+export type TestQuestionType = 'mcq' | 'short_answer';
+
+/** A question as frozen into a Test at creation time — deliberately a snapshot,
+ *  not a live BankQuestion reference, so editing/deleting a bank question can
+ *  never change a test candidates have already started. */
+export interface TestQuestionSnapshot {
+  questionText: string;
+  questionType: TestQuestionType;
+  options?: string[];
+  correctAnswer?: string;
+  marks: number;
+}
+
+/** Same snapshot, minus the answer key — what a candidate's client receives. */
+export type TestQuestionForCandidate = Omit<TestQuestionSnapshot, 'correctAnswer'>;
+
+export interface Test {
+  _id: string;
+  instituteId: string;
+  title: string;
+  batch: string;
+  track?: string;
+  questions: TestQuestionSnapshot[];
+  totalMarks: number;
+  durationMinutes: number;
+  /** Number of proctoring violations tolerated before an attempt auto-submits. */
+  violationLimit: number;
+  status: TestStatus;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateTestPayload {
+  title: string;
+  batch: string;
+  track?: string;
+  questions: TestQuestionSnapshot[];
+  durationMinutes: number;
+  violationLimit: number;
+}
+
+/** What a candidate sees in their test list / when starting one. */
+export interface TestForCandidate {
+  _id: string;
+  title: string;
+  batch: string;
+  track?: string;
+  totalMarks: number;
+  durationMinutes: number;
+  violationLimit: number;
+  questionCount: number;
+  /** Set once the candidate has an attempt in progress or submitted for this test. */
+  attemptStatus?: TestAttemptStatus;
+}
+
+export type TestAttemptStatus = 'in_progress' | 'submitted';
+export type TestViolationType = 'tab_switch' | 'window_blur' | 'fullscreen_exit' | 'copy_paste' | 'right_click' | 'devtools' | 'no_face';
+
+export interface TestViolation {
+  type: TestViolationType;
+  at: string;
+  detail?: string;
+}
+
+export interface TestAnswer {
+  questionIndex: number;
+  selectedOption?: string;
+  answerText?: string;
+}
+
+export interface TestAttempt {
+  _id: string;
+  instituteId: string;
+  testId: string;
+  candidateId: string;
+  startedAt: string;
+  submittedAt?: string;
+  autoSubmitted: boolean;
+  answers: TestAnswer[];
+  violations: TestViolation[];
+  score?: number;
+  status: TestAttemptStatus;
+}
+
+/** Returned once a candidate starts a test — the question set (no answer keys) plus the attempt id. */
+export interface StartTestAttemptResult {
+  attempt: TestAttempt;
+  questions: TestQuestionForCandidate[];
+  durationMinutes: number;
+  violationLimit: number;
+  serverTime: string;
+}
+
+export interface SubmitAnswerPayload {
+  questionIndex: number;
+  selectedOption?: string;
+  answerText?: string;
+}
+
+export interface LogViolationPayload {
+  type: TestViolationType;
+  detail?: string;
+}
+
+export interface LogViolationResult {
+  violationCount: number;
+  limit: number;
+  autoSubmitted: boolean;
+}
+
+/** TPO/faculty-facing attempt review — includes the answer key and per-question correctness. */
+export interface TestAttemptReview {
+  attempt: TestAttempt;
+  candidateName: string;
+  test: Test;
 }
