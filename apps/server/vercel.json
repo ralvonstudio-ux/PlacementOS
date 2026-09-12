@@ -1,5 +1,5 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [{ "source": "/(.*)", "destination": "/api" }],
-  "buildCommand": "echo 'no build step needed — the /api function is bundled independently by @vercel/node'"
+  "buildCommand": "cd ../../packages/types && node ../../node_modules/typescript/bin/tsc"
 }
