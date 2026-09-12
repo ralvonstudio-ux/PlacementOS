@@ -1,2 +1,0 @@
-import{j as e}from"./vendor-react-dN_UWpRY.js";import{c as x}from"./index-DYDcrffm.js";const l=({children:m,subtitle:s,className:i,trailing:t})=>e.jsxs("div",{className:x("flex items-end justify-between mb-4",i),children:[e.jsxs("div",{children:[e.jsx("h2",{className:"text-lg font-semibold text-gray-900 leading-tight",children:m}),s&&e.jsx("p",{className:"text-sm text-gray-500 mt-0.5",children:s})]}),t&&e.jsx("div",{className:"ml-4 flex-shrink-0 text-sm",children:t})]});export{l as S};
-//# sourceMappingURL=SectionTitle-BGqjSdC5.js.map
