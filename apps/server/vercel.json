@@ -1,4 +1,5 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "rewrites": [{ "source": "/(.*)", "destination": "/api" }]
+  "rewrites": [{ "source": "/(.*)", "destination": "/api" }],
+  "buildCommand": "echo 'no build step needed — the /api function is bundled independently by @vercel/node'"
 }
