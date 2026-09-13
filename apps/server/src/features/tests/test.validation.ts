@@ -31,7 +31,17 @@ export const submitAnswerSchema = z.object({
 });
 
 export const logViolationSchema = z.object({
-  type: z.enum(['tab_switch', 'window_blur', 'fullscreen_exit', 'copy_paste', 'right_click', 'devtools', 'no_face']),
+  type: z.enum([
+    'tab_switch',
+    'window_blur',
+    'fullscreen_exit',
+    'copy_paste',
+    'right_click',
+    'devtools',
+    'no_face',
+    'screen_share_stopped',
+    'extension_detected',
+  ]),
   detail: z.string().trim().max(300).optional(),
 });
 

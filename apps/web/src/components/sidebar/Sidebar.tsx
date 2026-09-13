@@ -20,6 +20,7 @@ import {
   BookMarked,
   ShieldCheck,
   Code2,
+  ClipboardCheck,
   CalendarClock,
   Grid3x3,
   Clock,
@@ -34,6 +35,7 @@ import { getHomePathForRole } from '@/features/auth/utils/roleHome';
 
 const NAV_ITEMS_FACULTY = [
   { label: 'My Dashboard', icon: LayoutDashboard, path: '/faculty', end: true },
+  { label: 'Attendance', icon: ClipboardCheck, path: '/faculty/attendance', end: false },
   { label: 'My Batches', icon: BookOpen, path: '/faculty/batches', end: false },
   { label: 'Training Plan', icon: Sparkles, path: '/faculty/training-plan', end: false },
   { label: 'Question Bank', icon: Library, path: '/faculty/question-bank', end: false },
@@ -44,6 +46,7 @@ const NAV_ITEMS_FACULTY = [
 
 const NAV_SECTION_TPO_OVERVIEW = [
   { label: 'Dashboard', icon: LayoutDashboard, path: '/tpo', end: true },
+  { label: 'Attendance', icon: ClipboardCheck, path: '/tpo/attendance', end: false },
   { label: 'Insights', icon: Sparkles, path: '/tpo/insights', end: false },
 ] as const;
 
@@ -64,8 +67,8 @@ const NAV_SECTION_TPO_TIMETABLE = [
 ] as const;
 
 const NAV_SECTION_TPO_STAFF = [
-  { label: 'Faculty', icon: Users, path: '/tpo/faculty', end: false },
-  { label: 'Candidates', icon: Users2, path: '/tpo/candidates', end: false },
+  { label: 'Trainers', icon: Users, path: '/tpo/faculty', end: false },
+  { label: 'Students', icon: Users2, path: '/tpo/candidates', end: false },
   { label: 'Data Import', icon: Upload, path: '/tpo/import', end: false },
 ] as const;
 
@@ -86,7 +89,7 @@ const NAV_SECTIONS_TPO = [
   { title: 'Academics', items: NAV_SECTION_TPO_ACADEMICS },
   { title: 'Timetable', items: NAV_SECTION_TPO_TIMETABLE },
   { title: 'Assessment', items: NAV_SECTION_TPO_TESTS },
-  { title: 'Staff & Candidates', items: NAV_SECTION_TPO_STAFF },
+  { title: 'Staff & Students', items: NAV_SECTION_TPO_STAFF },
 ] as const;
 
 const NAV_ITEMS_CANDIDATE = [
@@ -102,10 +105,10 @@ const NAV_ITEMS_CANDIDATE = [
 ] as const;
 
 const ROLE_LABEL: Record<string, string> = {
-  faculty: 'Faculty',
+  faculty: 'Trainer',
   tpo: 'TPO',
   admin: 'Admin',
-  candidate: 'Candidate',
+  candidate: 'Student',
 };
 
 interface SidebarProps {
@@ -190,14 +193,14 @@ export const Sidebar = ({ isOpen, onClose, overlayOnDesktop }: SidebarProps) => 
           </>
         ) : isCandidate ? (
           <>
-            <p className="px-3 pb-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Candidate Portal</p>
+            <p className="px-3 pb-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Student Portal</p>
             {NAV_ITEMS_CANDIDATE.map((item) => (
               <SidebarNavItem key={item.path} to={item.path} icon={item.icon} label={item.label} end={item.end} />
             ))}
           </>
         ) : (
           <>
-            <p className="px-3 pb-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Faculty Portal</p>
+            <p className="px-3 pb-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Trainer Portal</p>
             {NAV_ITEMS_FACULTY.map((item) => (
               <SidebarNavItem key={item.path} to={item.path} icon={item.icon} label={item.label} end={item.end} />
             ))}

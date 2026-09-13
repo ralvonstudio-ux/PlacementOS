@@ -11,6 +11,7 @@ router.get('/', candidateController.list);
 router.get('/:id', candidateController.getById);
 router.post('/', authorize('admin', 'tpo'), candidateController.create);
 router.patch('/:id', authorize('admin', 'tpo'), candidateController.update);
+router.patch('/:id/faculty-note', authorize('admin', 'tpo', 'faculty'), candidateController.updateFacultyNote);
 router.delete('/:id', authorize('admin', 'tpo'), candidateController.remove);
 router.post('/:id/login', authorize('admin', 'tpo'), candidateController.createLogin);
 

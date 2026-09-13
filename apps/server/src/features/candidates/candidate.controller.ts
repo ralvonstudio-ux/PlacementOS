@@ -44,6 +44,16 @@ export const candidateController = {
     }
   },
 
+  async updateFacultyNote(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const ctx = buildAuthContext(req.user!, req.ip ?? undefined);
+      const candidate = await candidateService.updateFacultyNote(req.params.id, req.body, ctx);
+      sendSuccess(res, candidate, 'Note saved successfully');
+    } catch (err) {
+      next(err);
+    }
+  },
+
   async remove(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const ctx = buildAuthContext(req.user!, req.ip ?? undefined);

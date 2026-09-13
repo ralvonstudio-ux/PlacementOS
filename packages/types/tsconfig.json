@@ -1,6 +1,15 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
+    // See the matching comment in apps/server/tsconfig.json — restated here so this
+    // config is self-contained regardless of whether the "extends" above resolves.
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "CommonJS",
+    "moduleResolution": "node",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
     "outDir": "./dist",
     "rootDir": "./src",
     "declaration": true

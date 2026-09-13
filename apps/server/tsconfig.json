@@ -1,6 +1,21 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
+    // Vercel's serverless-function build type-checks this project from a build context
+    // scoped to apps/server (Root Directory), which does not reliably resolve the
+    // "extends" path above pointing outside it. Without it, `strict` (and so
+    // `strictNullChecks`) silently falls back to TypeScript's default of `false`, which
+    // breaks zod's conditional required/optional inference for every schema in this
+    // project — every field starts looking optional regardless of whether `.optional()`
+    // was called. Restating the critical options here directly makes this config
+    // self-contained so it behaves the same whether or not the extends chain resolves.
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "CommonJS",
+    "moduleResolution": "node",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
     "outDir": "./dist",
     "rootDir": "./src",
     "declaration": false,

@@ -34,7 +34,7 @@ export function TpoTrainingPlanOverviewPage() {
         </div>
       )}
 
-      <SectionTitle>By Faculty</SectionTitle>
+      <SectionTitle>By Trainer</SectionTitle>
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
         {isLoading ? (
           <div className="p-5 space-y-3 animate-pulse">
@@ -43,31 +43,33 @@ export function TpoTrainingPlanOverviewPage() {
         ) : overview.length === 0 ? (
           <EmptyState icon={ClipboardList} title="No training plans yet" description="Plans will appear here once faculty start generating them." />
         ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-100 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                <th className="px-5 py-3">Faculty</th>
-                <th className="px-5 py-3">Batch</th>
-                <th className="px-5 py-3">Track</th>
-                <th className="px-5 py-3 text-right">Progress</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {overview.map((row) => {
-                const pct = row.totalDays > 0 ? Math.round((row.completedDays / row.totalDays) * 100) : 0;
-                return (
-                  <tr key={`${row.facultyId}-${row.batch}-${row.track}`}>
-                    <td className="px-5 py-3 font-medium text-gray-900">{row.facultyName}</td>
-                    <td className="px-5 py-3 text-gray-600">{row.batch}</td>
-                    <td className="px-5 py-3 text-gray-600">{row.track}</td>
-                    <td className="px-5 py-3 text-right text-gray-500">
-                      {row.completedDays}/{row.totalDays} days ({pct}%)
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[480px]">
+              <thead>
+                <tr className="border-b border-gray-100 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                  <th className="px-5 py-3">Trainer</th>
+                  <th className="px-5 py-3">Batch</th>
+                  <th className="px-5 py-3">Track</th>
+                  <th className="px-5 py-3 text-right">Progress</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {overview.map((row) => {
+                  const pct = row.totalDays > 0 ? Math.round((row.completedDays / row.totalDays) * 100) : 0;
+                  return (
+                    <tr key={`${row.facultyId}-${row.batch}-${row.track}`}>
+                      <td className="px-5 py-3 font-medium text-gray-900 whitespace-nowrap">{row.facultyName}</td>
+                      <td className="px-5 py-3 text-gray-600 whitespace-nowrap">{row.batch}</td>
+                      <td className="px-5 py-3 text-gray-600 whitespace-nowrap">{row.track}</td>
+                      <td className="px-5 py-3 text-right text-gray-500 whitespace-nowrap">
+                        {row.completedDays}/{row.totalDays} days ({pct}%)
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </PageContainer>

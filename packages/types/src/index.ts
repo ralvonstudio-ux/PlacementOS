@@ -74,6 +74,9 @@ export interface Candidate {
   status: 'active' | 'inactive' | 'placed';
   /** Admin/TPO-issued login address — separate from `email`, mirrors Faculty.loginEmail. */
   loginEmail?: string;
+  /** Faculty-attached note, editable from the batch roster's edit view only —
+   *  never shown on the attendance-marking screen itself. */
+  facultyNote?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -1539,7 +1542,16 @@ export interface TestForCandidate {
 }
 
 export type TestAttemptStatus = 'in_progress' | 'submitted';
-export type TestViolationType = 'tab_switch' | 'window_blur' | 'fullscreen_exit' | 'copy_paste' | 'right_click' | 'devtools' | 'no_face';
+export type TestViolationType =
+  | 'tab_switch'
+  | 'window_blur'
+  | 'fullscreen_exit'
+  | 'copy_paste'
+  | 'right_click'
+  | 'devtools'
+  | 'no_face'
+  | 'screen_share_stopped'
+  | 'extension_detected';
 
 export interface TestViolation {
   type: TestViolationType;

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { AlertTriangle, Camera, CheckCircle2, Loader2, Maximize, ShieldAlert, ChevronLeft, ChevronRight } from 'lucide-react';
+import { AlertTriangle, Camera, CheckCircle2, Loader2, Maximize, MonitorUp, ShieldAlert, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useStartTest, useSubmitTestAnswer, useLogTestViolation, useSubmitTest } from '../hooks/useTests';
 import { extractErrorMessage } from '@/services/api';
 import type { TestQuestionForCandidate, TestViolationType, StartTestAttemptResult } from '@placementos/types';
@@ -15,6 +15,8 @@ const VIOLATION_LABEL: Record<TestViolationType, string> = {
   right_click: 'Right-click / context menu attempted',
   devtools: 'Developer tools detected',
   no_face: 'Camera feed lost',
+  screen_share_stopped: 'Screen sharing was stopped',
+  extension_detected: 'A browser extension was detected',
 };
 
 // DevTools heuristic: a docked panel changes the gap between outer and inner window
@@ -22,6 +24,57 @@ const VIOLATION_LABEL: Record<TestViolationType, string> = {
 // tiny/undocked window can false-positive — but it's the same signal every browser-based
 // proctoring tool uses, since a page has no real way to ask "is DevTools open?".
 const DEVTOOLS_THRESHOLD = 160;
+
+// Best-effort extension fingerprints — a page can't ask the browser "list my extensions",
+// so this looks for DOM/global-scope traces the most common ones leave behind. Each check
+// runs on its own and is reported at most once per attempt (see extensionsReportedRef) so a
+// persistent extension doesn't spam repeat violations every poll.
+const EXTENSION_CHECKS: Array<{ id: string; detail: string; test: () => boolean }> = [
+  {
+    id: 'grammarly',
+    detail: 'Grammarly extension detected',
+    test: () => !!document.querySelector('grammarly-desktop-integration, grammarly-extension, [data-gr-ext-installed]'),
+  },
+  {
+    id: 'lastpass',
+    detail: 'LastPass extension detected',
+    test: () => !!document.querySelector('[data-lastpass-icon-root], #__lastpass_root'),
+  },
+  {
+    id: 'translate',
+    detail: 'Translate extension detected',
+    test: () => !!document.querySelector('#google_translate_element, .goog-te-banner-frame'),
+  },
+  {
+    id: 'dark-reader',
+    detail: 'Dark Reader extension detected',
+    test: () => document.documentElement.getAttribute('data-darkreader-mode') !== null,
+  },
+  {
+    id: 'web3-wallet',
+    detail: 'Wallet / web3 extension detected',
+    test: () => typeof (window as unknown as { ethereum?: unknown }).ethereum !== 'undefined',
+  },
+  {
+    id: 'react-devtools',
+    detail: 'React/Redux DevTools extension detected',
+    test: () => typeof (window as unknown as { __REACT_DEVTOOLS_GLOBAL_HOOK__?: unknown }).__REACT_DEVTOOLS_GLOBAL_HOOK__ !== 'undefined',
+  },
+  {
+    id: 'honey',
+    detail: 'Honey extension detected',
+    test: () => !!document.querySelector('honey-extension, #honey-header'),
+  },
+];
+
+// Classic ad-blocker bait: a hidden element named like an ad gets hidden or stripped of
+// layout by any content-blocking extension — presence of the technique itself (not any one
+// named product) is the signal.
+function checkAdBlockBait(): boolean {
+  const bait = document.getElementById('__proctor_adblock_bait__');
+  if (!bait) return false;
+  return bait.offsetParent === null || bait.offsetHeight === 0 || getComputedStyle(bait).display === 'none';
+}
 
 export function TestTakingPage() {
   const { testId } = useParams<{ testId: string }>();
@@ -34,14 +87,17 @@ export function TestTakingPage() {
   const [secondsLeft, setSecondsLeft] = useState(0);
   const [violationBanner, setViolationBanner] = useState<{ type: TestViolationType; count: number; limit: number } | null>(null);
   const [cameraError, setCameraError] = useState('');
+  const [screenShareError, setScreenShareError] = useState('');
   const [error, setError] = useState('');
   const [finalScore, setFinalScore] = useState<number | undefined>();
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const screenStreamRef = useRef<MediaStream | null>(null);
   const attemptIdRef = useRef<string>('');
   const phaseRef = useRef<Phase>('instructions');
   const devtoolsOpenRef = useRef(false);
+  const extensionsReportedRef = useRef<Set<string>>(new Set());
 
   const startTest = useStartTest();
   const submitAnswerMutation = useSubmitTestAnswer();
@@ -50,9 +106,11 @@ export function TestTakingPage() {
 
   useEffect(() => { phaseRef.current = phase; }, [phase]);
 
-  const stopCamera = useCallback(() => {
+  const stopMediaStreams = useCallback(() => {
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
+    screenStreamRef.current?.getTracks().forEach((t) => t.stop());
+    screenStreamRef.current = null;
   }, []);
 
   const exitFullscreenIfActive = useCallback(() => {
@@ -67,7 +125,7 @@ export function TestTakingPage() {
         setViolationBanner({ type, count: result.violationCount, limit: result.limit });
         if (result.autoSubmitted) {
           setPhase('auto_submitted');
-          stopCamera();
+          stopMediaStreams();
           exitFullscreenIfActive();
         }
       } catch {
@@ -75,28 +133,38 @@ export function TestTakingPage() {
         // the source of truth for the count, so this is best-effort telemetry from the client.
       }
     },
-    [logViolationMutation, stopCamera, exitFullscreenIfActive]
+    [logViolationMutation, stopMediaStreams, exitFullscreenIfActive]
   );
+
+  // `reportViolation` is recreated whenever `logViolationMutation` (a TanStack Query mutation
+  // object) gets a new identity, which happens far more often than the listeners/intervals
+  // below actually need to be rebuilt — most visibly, the once-a-second countdown re-render
+  // was tearing down and recreating the devtools/extension intervals before their multi-second
+  // period ever elapsed, so they silently never fired. Routing calls through a ref keeps the
+  // proctoring effect's own dependency array down to just `phase`, so it mounts once per attempt
+  // and its intervals actually get to run.
+  const reportViolationRef = useRef(reportViolation);
+  useEffect(() => { reportViolationRef.current = reportViolation; }, [reportViolation]);
 
   // ── Proctoring listeners — armed only while a test is actually in progress ──
   useEffect(() => {
     if (phase !== 'in_progress') return;
 
-    const onVisibilityChange = () => { if (document.hidden) reportViolation('tab_switch'); };
-    const onBlur = () => reportViolation('window_blur');
+    const onVisibilityChange = () => { if (document.hidden) reportViolationRef.current('tab_switch'); };
+    const onBlur = () => reportViolationRef.current('window_blur');
     const onFullscreenChange = () => {
       if (!document.fullscreenElement) {
-        reportViolation('fullscreen_exit');
+        reportViolationRef.current('fullscreen_exit');
         document.documentElement.requestFullscreen().catch(() => {});
       }
     };
-    const onCopyCutPaste = (e: ClipboardEvent) => { e.preventDefault(); reportViolation('copy_paste'); };
-    const onContextMenu = (e: MouseEvent) => { e.preventDefault(); reportViolation('right_click'); };
+    const onCopyCutPaste = (e: ClipboardEvent) => { e.preventDefault(); reportViolationRef.current('copy_paste'); };
+    const onContextMenu = (e: MouseEvent) => { e.preventDefault(); reportViolationRef.current('right_click'); };
     const onKeyDown = (e: KeyboardEvent) => {
       // Block the most common "escape the lockdown" shortcuts outright, not just detect them.
       if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && ['I', 'J', 'C'].includes(e.key)) || (e.ctrlKey && ['c', 'v', 'x', 'u', 'p'].includes(e.key))) {
         e.preventDefault();
-        if (e.key === 'F12' || (e.ctrlKey && e.shiftKey)) reportViolation('devtools');
+        if (e.key === 'F12' || (e.ctrlKey && e.shiftKey)) reportViolationRef.current('devtools');
       }
     };
 
@@ -113,11 +181,32 @@ export function TestTakingPage() {
       const isOpen = window.outerWidth - window.innerWidth > DEVTOOLS_THRESHOLD || window.outerHeight - window.innerHeight > DEVTOOLS_THRESHOLD;
       if (isOpen && !devtoolsOpenRef.current) {
         devtoolsOpenRef.current = true;
-        reportViolation('devtools');
+        reportViolationRef.current('devtools');
       } else if (!isOpen) {
         devtoolsOpenRef.current = false;
       }
     }, 1500);
+
+    // Ad-block bait element — see checkAdBlockBait for how this is read.
+    const bait = document.createElement('div');
+    bait.id = '__proctor_adblock_bait__';
+    bait.className = 'ad ads adsbox banner-ad textad text_ad text-ad';
+    bait.style.cssText = 'position:absolute;left:-9999px;top:-9999px;width:1px;height:1px;';
+    document.body.appendChild(bait);
+
+    const extensionInterval = setInterval(() => {
+      for (const check of EXTENSION_CHECKS) {
+        if (extensionsReportedRef.current.has(check.id)) continue;
+        if (check.test()) {
+          extensionsReportedRef.current.add(check.id);
+          reportViolationRef.current('extension_detected', check.detail);
+        }
+      }
+      if (!extensionsReportedRef.current.has('adblock') && checkAdBlockBait()) {
+        extensionsReportedRef.current.add('adblock');
+        reportViolationRef.current('extension_detected', 'Ad-blocking or content-blocking extension detected');
+      }
+    }, 2000);
 
     return () => {
       document.removeEventListener('visibilitychange', onVisibilityChange);
@@ -129,8 +218,12 @@ export function TestTakingPage() {
       document.removeEventListener('contextmenu', onContextMenu);
       document.removeEventListener('keydown', onKeyDown);
       clearInterval(devtoolsInterval);
+      clearInterval(extensionInterval);
+      bait.remove();
     };
-  }, [phase, reportViolation]);
+    // Deliberately just `phase` — see reportViolationRef above for why reportViolation itself
+    // must not be a dependency here.
+  }, [phase]);
 
   // ── Countdown timer ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -146,13 +239,14 @@ export function TestTakingPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [secondsLeft, phase]);
 
-  // Release the camera and fullscreen if the candidate navigates away mid-test.
-  useEffect(() => () => { stopCamera(); exitFullscreenIfActive(); }, [stopCamera, exitFullscreenIfActive]);
+  // Release the camera/screen-share and fullscreen if the candidate navigates away mid-test.
+  useEffect(() => () => { stopMediaStreams(); exitFullscreenIfActive(); }, [stopMediaStreams, exitFullscreenIfActive]);
 
   async function handleStart() {
     if (!testId) return;
     setError('');
     setCameraError('');
+    setScreenShareError('');
 
     try {
       await document.documentElement.requestFullscreen();
@@ -168,6 +262,20 @@ export function TestTakingPage() {
       stream.getVideoTracks()[0]?.addEventListener('ended', () => reportViolation('no_face', 'Camera stream ended'));
     } catch {
       setCameraError('Camera access is required for this test. Please allow camera permission and try again.');
+      exitFullscreenIfActive();
+      return;
+    }
+
+    try {
+      // Screen sharing is required for the full test duration — the candidate picks what to
+      // share (whole screen recommended); stopping it mid-test, or narrowing it to just this
+      // tab, is on the candidate to avoid but only an outright stop is detectable and logged.
+      const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+      screenStreamRef.current = screenStream;
+      screenStream.getVideoTracks()[0]?.addEventListener('ended', () => reportViolation('screen_share_stopped', 'Screen-share stream ended'));
+    } catch {
+      setScreenShareError('Screen sharing is required for this test. Please allow it and try again.');
+      stopMediaStreams();
       exitFullscreenIfActive();
       return;
     }
@@ -191,7 +299,7 @@ export function TestTakingPage() {
       setPhase('in_progress');
     } catch (err) {
       setError(extractErrorMessage(err));
-      stopCamera();
+      stopMediaStreams();
       exitFullscreenIfActive();
     }
   }
@@ -215,7 +323,7 @@ export function TestTakingPage() {
       setFinalScore(result.score);
       setPhase('submitted');
     } finally {
-      stopCamera();
+      stopMediaStreams();
       exitFullscreenIfActive();
     }
   }
@@ -263,6 +371,8 @@ export function TestTakingPage() {
               'Switching tabs or losing window focus is logged',
               'Copy, paste, and right-click are disabled and logged',
               'Your camera must stay on for the full test',
+              'Your screen must stay shared for the full test — stopping it is logged',
+              'Browser extensions (Grammarly, ad-blockers, translators, wallets, etc.) are detected and logged — disable them before starting',
               'Exceeding the violation limit auto-submits your test immediately',
             ].map((line) => (
               <li key={line} className="flex items-start gap-2.5 text-sm text-zinc-300">
@@ -272,9 +382,9 @@ export function TestTakingPage() {
             ))}
           </ul>
 
-          {(error || cameraError) && (
+          {(error || cameraError || screenShareError) && (
             <div className="mb-4 rounded-xl bg-red-950/40 border border-red-900/30 px-4 py-3">
-              <p className="text-sm text-red-400">{error || cameraError}</p>
+              <p className="text-sm text-red-400">{error || cameraError || screenShareError}</p>
             </div>
           )}
 
@@ -284,7 +394,7 @@ export function TestTakingPage() {
             className="w-full inline-flex items-center justify-center gap-2 h-11 rounded-xl bg-violet-600 hover:bg-violet-700 text-sm font-bold text-white transition-colors disabled:opacity-50"
           >
             {startTest.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Maximize className="w-4 h-4" />}
-            Enable Fullscreen &amp; Camera, Start Test
+            Enable Fullscreen, Camera &amp; Screen Share, Start Test
           </button>
         </div>
       </div>
@@ -392,7 +502,8 @@ export function TestTakingPage() {
 
       <footer className="px-6 py-2.5 border-t border-white/10 flex items-center gap-2 text-xs text-zinc-500">
         <Camera className="w-3.5 h-3.5" />
-        Camera active · Fullscreen enforced · All activity is logged
+        <MonitorUp className="w-3.5 h-3.5" />
+        Camera &amp; screen share active · Fullscreen enforced · Extensions monitored · All activity is logged
       </footer>
     </div>
   );

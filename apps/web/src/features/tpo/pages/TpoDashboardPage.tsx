@@ -66,8 +66,8 @@ export function TpoDashboardPage() {
       )}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4 mb-8">
-        <StatCard icon={GraduationCap} label="Candidates" value={data?.candidates.total ?? '—'} sub={data ? `${data.candidates.placed} placed` : undefined} accent="bg-blue-50 text-blue-600" />
-        <StatCard icon={Users} label="Faculty" value={data?.faculty.total ?? '—'} sub={data ? `${data.faculty.active} active` : undefined} accent="bg-purple-50 text-purple-600" />
+        <StatCard icon={GraduationCap} label="Students" value={data?.candidates.total ?? '—'} sub={data ? `${data.candidates.placed} placed` : undefined} accent="bg-blue-50 text-blue-600" />
+        <StatCard icon={Users} label="Trainers" value={data?.faculty.total ?? '—'} sub={data ? `${data.faculty.active} active` : undefined} accent="bg-purple-50 text-purple-600" />
         <StatCard icon={CalendarClock} label="Training Schedule" value={data?.trainingSchedule.published ?? '—'} sub="sessions scheduled" accent="bg-emerald-50 text-emerald-600" />
         <StatCard
           icon={ClipboardList}
@@ -81,7 +81,7 @@ export function TpoDashboardPage() {
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-6">
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-            <SectionTitle subtitle="Candidate attendance across the whole institute">Attendance Today</SectionTitle>
+            <SectionTitle subtitle="Student attendance across the whole institute">Attendance Today</SectionTitle>
             <AttendanceWidget data={data?.attendance} isLoading={isLoading} />
           </div>
 

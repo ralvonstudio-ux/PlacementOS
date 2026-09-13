@@ -8,8 +8,9 @@ interface Props {
   onSuccess?: () => void;
 }
 
+// IST, not UTC — see the matching comment in BatchAttendancePage.tsx.
 function todayStr() {
-  return new Date().toISOString().split('T')[0];
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
 }
 
 export function ApplyLeaveModal({ onClose, onSuccess }: Props) {

@@ -32,7 +32,7 @@ export function AddCandidateModal({ onClose }: { onClose: () => void }) {
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
       <form onSubmit={handleSubmit} className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
         <button type="button" onClick={onClose} className="absolute top-4 right-4 p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"><X className="w-4 h-4" /></button>
-        <h2 className="text-lg font-bold text-gray-900 mb-5">Add Candidate</h2>
+        <h2 className="text-lg font-bold text-gray-900 mb-5">Add Student</h2>
         <div className="space-y-3">
           <input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Full name" required className={inputCls} />
           <div className="grid grid-cols-2 gap-3">
@@ -49,7 +49,7 @@ export function AddCandidateModal({ onClose }: { onClose: () => void }) {
           </div>
           {error && <p className="text-sm text-red-600">{error}</p>}
           <button type="submit" disabled={isPending} className="w-full h-10 rounded-xl bg-violet-600 hover:bg-violet-700 text-sm font-semibold text-white transition-colors disabled:opacity-50">
-            {isPending ? 'Adding…' : 'Add Candidate'}
+            {isPending ? 'Adding…' : 'Add Student'}
           </button>
         </div>
       </form>

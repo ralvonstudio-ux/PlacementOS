@@ -21,9 +21,9 @@ export function FacultyProfilePage() {
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm divide-y divide-gray-50">
         <Row label="Name" value={`${user.firstName} ${user.lastName}`} />
         <Row label="Email" value={user.email} />
-        <Row label="Role" value="Faculty" />
+        <Row label="Role" value="Trainer" />
       </div>
-      <p className="text-sm text-gray-400 mt-4">To change contact details, ask your TPO to update your Faculty record.</p>
+      <p className="text-sm text-gray-400 mt-4">To change contact details, ask your TPO to update your Trainer record.</p>
     </PageContainer>
   );
 }
