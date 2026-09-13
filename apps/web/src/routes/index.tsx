@@ -25,6 +25,22 @@ const PapersListPage = lazy(() => import('@/features/question-bank/pages/PapersL
 const WorksheetsPage = lazy(() => import('@/features/worksheet-generator/pages/WorksheetsPage').then((m) => ({ default: m.WorksheetsPage })));
 const FacultyProfilePage = lazy(() => import('@/features/faculty-workspace/pages/FacultyProfilePage').then((m) => ({ default: m.FacultyProfilePage })));
 
+// ── Admin pages ────────────────────────────────────────────────────────────
+const AdminDashboardPage = lazy(() => import('@/features/admin/pages/AdminDashboardPage').then((m) => ({ default: m.AdminDashboardPage })));
+const AdminFacultyPage = lazy(() => import('@/features/admin/pages/AdminFacultyPage').then((m) => ({ default: m.AdminFacultyPage })));
+
+// ── Timetable pages (training schedule) ─────────────────────────────────────
+const BatchTimetablePage = lazy(() => import('@/features/training-schedule/pages/BatchTimetablePage').then((m) => ({ default: m.BatchTimetablePage })));
+const PeriodSetupPage = lazy(() => import('@/features/training-schedule/pages/PeriodSetupPage').then((m) => ({ default: m.PeriodSetupPage })));
+const MasterGridPage = lazy(() => import('@/features/training-schedule/pages/MasterGridPage').then((m) => ({ default: m.MasterGridPage })));
+const SubstituteWorkspace = lazy(() => import('@/features/training-schedule/pages/SubstituteWorkspace').then((m) => ({ default: m.SubstituteWorkspace })));
+
+// ── Import pages (bulk CSV/Excel upload) ────────────────────────────────────
+const ImportDashboard = lazy(() => import('@/features/import/pages/ImportDashboard').then((m) => ({ default: m.ImportDashboard })));
+const UploadCenter = lazy(() => import('@/features/import/pages/UploadCenter').then((m) => ({ default: m.UploadCenter })));
+const ImportSessionDetail = lazy(() => import('@/features/import/pages/ImportSessionDetail').then((m) => ({ default: m.ImportSessionDetail })));
+const ImportHistory = lazy(() => import('@/features/import/pages/ImportHistory').then((m) => ({ default: m.ImportHistory })));
+
 // ── TPO pages ──────────────────────────────────────────────────────────────
 const TpoDashboardPage = lazy(() => import('@/features/tpo/pages/TpoDashboardPage').then((m) => ({ default: m.TpoDashboardPage })));
 const TpoInsightsPage = lazy(() => import('@/features/tpo/pages/TpoInsightsPage').then((m) => ({ default: m.TpoInsightsPage })));
@@ -103,6 +119,16 @@ export const router = createBrowserRouter([
               },
 
               {
+                path: 'admin',
+                element: <ProtectedRoute allowedRoles={['admin']} />,
+                children: [
+                  { index: true, element: <AdminDashboardPage /> },
+                  { path: 'faculty', element: <AdminFacultyPage /> },
+                  { path: 'candidates', element: <TpoCandidatesPage /> },
+                ],
+              },
+
+              {
                 path: 'tpo',
                 element: <ProtectedRoute allowedRoles={['tpo', 'admin']} />,
                 children: [
@@ -111,6 +137,14 @@ export const router = createBrowserRouter([
                   { path: 'leave-approvals', element: <TpoLeaveApprovalsPage /> },
                   { path: 'training-plan', element: <TpoTrainingPlanOverviewPage /> },
                   { path: 'question-bank-overview', element: <TpoQuestionBankOverviewPage /> },
+                  { path: 'timetable', element: <BatchTimetablePage /> },
+                  { path: 'timetable/periods', element: <PeriodSetupPage /> },
+                  { path: 'timetable/master-grid', element: <MasterGridPage /> },
+                  { path: 'timetable/substitutes', element: <SubstituteWorkspace /> },
+                  { path: 'import', element: <ImportDashboard /> },
+                  { path: 'import/upload', element: <UploadCenter /> },
+                  { path: 'import/history', element: <ImportHistory /> },
+                  { path: 'import/sessions/:id', element: <ImportSessionDetail /> },
                   { path: 'faculty', element: <TpoFacultyPage /> },
                   { path: 'candidates', element: <TpoCandidatesPage /> },
                   { path: 'practice', element: <TpoPracticeLibraryPage /> },

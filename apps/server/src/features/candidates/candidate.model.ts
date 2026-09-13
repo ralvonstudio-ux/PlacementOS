@@ -51,6 +51,13 @@ candidateSchema.index({ instituteId: 1, isDeleted: 1, batch: 1 });
 candidateSchema.index({ instituteId: 1, isDeleted: 1, department: 1 });
 candidateSchema.index({ instituteId: 1, isDeleted: 1, placementYear: 1 });
 candidateSchema.index({ instituteId: 1, isDeleted: 1, status: 1 });
-candidateSchema.index({ instituteId: 1, loginEmail: 1 }, { unique: true, sparse: true });
+// A plain `sparse: true` on this compound index only excludes a document when EVERY indexed
+// field is missing — since instituteId is always set, two candidates with no loginEmail in the
+// same institute still collide as "duplicate null". A partial filter scopes the uniqueness
+// constraint to documents that actually have a loginEmail, which is what "sparse" was meant to do here.
+candidateSchema.index(
+  { instituteId: 1, loginEmail: 1 },
+  { unique: true, partialFilterExpression: { loginEmail: { $exists: true, $type: 'string' } } }
+);
 
 export const Candidate = mongoose.model<ICandidate>('Candidate', candidateSchema);

@@ -17,6 +17,7 @@ import tpoAssistantRoutes from '../features/tpo-assistant/tpo-assistant.routes';
 import candidateProfileRoutes from '../features/candidate-profile/candidate-profile.routes';
 import practiceRoutes from '../features/practice/practice.routes';
 import testRoutes from '../features/tests/test.routes';
+import importRoutes from '../features/import/import.routes';
 
 const router = Router();
 
@@ -39,5 +40,6 @@ router.use('/tpo-assistant', tpoAssistantRoutes);
 router.use('/candidate-profile', candidateProfileRoutes);
 router.use('/practice', practiceRoutes);
 router.use('/tests', testRoutes);
+router.use('/import', importRoutes);
 
 export default router;

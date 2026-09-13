@@ -132,8 +132,141 @@ export interface TrainingScheduleEntry {
   endTime: string;
   room?: string;
   placementYear: string;
+  /** Period slot this entry was placed in, when entered via the timetable grid.
+   *  Freeform entries (created before period slots existed, or via the API
+   *  directly) may leave this unset — startTime/endTime remain the source of truth. */
+  slotId?: string;
   createdAt: string;
   updatedAt: string;
+  /** Joined in on grid/master-grid responses. */
+  facultyName?: string;
+}
+
+// ── Timetable period slots (institute-wide bell schedule) ─────────────────
+export interface PeriodSlot {
+  _id: string;
+  instituteId: string;
+  name: string;
+  orderIndex: number;
+  startTime: string;
+  endTime: string;
+  isBreak: boolean;
+  daysApplicable: number[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreatePeriodSlotPayload {
+  name: string;
+  startTime: string;
+  endTime: string;
+  isBreak?: boolean;
+  daysApplicable?: number[];
+}
+
+export type UpdatePeriodSlotPayload = Partial<CreatePeriodSlotPayload>;
+
+// ── Timetable conflicts ────────────────────────────────────────────────────
+export interface ConflictInfo {
+  type: 'faculty_double_booked' | 'room_double_booked';
+  dayOfWeek: number;
+  slotId?: string;
+  startTime: string;
+  endTime: string;
+  entryIds: string[];
+  facultyId?: string;
+  facultyName?: string;
+  room?: string;
+  message: string;
+}
+
+// ── Timetable master grid (whole-institute view) ───────────────────────────
+export interface MasterGridQuery {
+  placementYear: string;
+  batch?: string;
+}
+
+export interface MasterGridCell {
+  dayOfWeek: number;
+  slotId: string;
+  batch: string;
+  entry?: TrainingScheduleEntry;
+}
+
+export interface MasterGridResponse {
+  slots: PeriodSlot[];
+  batches: string[];
+  cells: MasterGridCell[];
+  conflicts: ConflictInfo[];
+}
+
+export interface SetMasterGridCellPayload {
+  batch: string;
+  track: string;
+  facultyId: string;
+  dayOfWeek: number;
+  slotId: string;
+  placementYear: string;
+  room?: string;
+  /** Existing entry id to update instead of creating a new one — pass when
+   *  editing a cell that's already filled. */
+  entryId?: string;
+}
+
+// ── Timetable substitutes ──────────────────────────────────────────────────
+export type SubstituteStatus = 'pending' | 'assigned' | 'cancelled';
+
+export interface TimetableSubstitute {
+  _id: string;
+  instituteId: string;
+  date: string;
+  entryId: string;
+  originalFacultyId: string;
+  substituteFacultyId?: string;
+  reason?: string;
+  status: SubstituteStatus;
+  createdBy?: string;
+  createdAt: string;
+  updatedAt: string;
+  /** Joined in on list/needs-substitute responses. */
+  originalFacultyName?: string;
+  substituteFacultyName?: string;
+  batch?: string;
+  track?: string;
+  dayOfWeek?: number;
+  startTime?: string;
+  endTime?: string;
+}
+
+export interface CreateSubstitutePayload {
+  date: string;
+  entryId: string;
+  reason?: string;
+  substituteFacultyId?: string;
+}
+
+export interface UpdateSubstitutePayload {
+  substituteFacultyId?: string;
+  status?: SubstituteStatus;
+  reason?: string;
+}
+
+/** A schedule entry on a given date whose faculty is on approved leave and
+ *  has no substitute assigned yet — backs the "Needs Substitute" worklist. */
+export interface NeedsSubstituteEntry {
+  date: string;
+  entry: TrainingScheduleEntry;
+  facultyName: string;
+  leaveRequestId: string;
+}
+
+export interface SubstituteSuggestion {
+  facultyId: string;
+  facultyName: string;
+  /** True when this faculty already teaches the same track (best-fit first). */
+  sameTrack: boolean;
+  /** True when the faculty has no other entry in this day/slot. */
+  available: boolean;
 }
 
 // ── Training Plan (was Academic Plan) ────────────────────────────────────
@@ -1300,6 +1433,50 @@ export interface CreatePracticeSheetPayload {
   batch: string;
   category: PracticeCategory;
   questionIds: string[];
+}
+
+// ── Data Import (bulk CSV/Excel upload with AI-assisted column mapping) ────
+export type ImportType = 'training-schedule' | 'faculty' | 'candidates';
+export type ImportStatus = 'mapping' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'rolled_back';
+export type ImportRowStatus = 'pending' | 'valid' | 'invalid' | 'duplicate' | 'created' | 'skipped';
+export type DuplicateStrategy = 'skip' | 'overwrite' | 'create';
+
+export interface ImportField {
+  field: string;
+  label: string;
+  required: boolean;
+  description?: string;
+}
+
+export type ImportTemplates = Record<ImportType, ImportField[]>;
+
+export interface ImportRow {
+  rowNumber: number;
+  raw: Record<string, string>;
+  mapped: Record<string, unknown>;
+  errors: string[];
+  status: ImportRowStatus;
+  entityId?: string;
+}
+
+export interface ImportSession {
+  _id: string;
+  instituteId: string;
+  importType: ImportType;
+  originalFileName: string;
+  totalRows: number;
+  status: ImportStatus;
+  rawHeaders: string[];
+  columnMapping: Record<string, string>;
+  duplicateStrategy: DuplicateStrategy;
+  rows: ImportRow[];
+  createdEntityIds: string[];
+  errorMessage?: string;
+  createdBy: string;
+  confirmedAt?: string;
+  rolledBackAt?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 // ── Proctored Tests ────────────────────────────────────────────────────────
