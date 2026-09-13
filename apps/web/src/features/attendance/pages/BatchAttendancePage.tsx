@@ -1,9 +1,8 @@
-import { useState, useMemo } from 'react';
+import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, ChevronLeft, ChevronRight, LayoutList, Layers } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react';
 import { candidatesApi } from '@/features/candidates/api/candidates.api';
-import { BulkAttendanceForm } from '../components/BulkAttendanceForm';
 import { SwipeAttendanceDeck } from '../components/SwipeAttendanceDeck';
 import { AttendanceStatusBadge } from '../components/AttendanceStatusBadge';
 import { useBatchAttendance } from '../hooks/useAttendance';
@@ -30,13 +29,6 @@ function formatLong(dateStr: string): string {
   });
 }
 
-// Phones default to the swipeable deck (one candidate at a time, big tap targets);
-// wider screens default to the dense list (faster for marking many people at once
-// with a mouse). Either view is always reachable via the toggle regardless of size.
-function isNarrowScreen(): boolean {
-  return typeof window !== 'undefined' && window.innerWidth < 768;
-}
-
 function initialsOf(name: string): string {
   return name.split(' ').map((n) => n[0]).filter(Boolean).slice(0, 2).join('').toUpperCase();
 }
@@ -48,7 +40,6 @@ export function BatchAttendancePage() {
   const today             = todayStr();
   const date              = searchParams.get('date') || today;
   const isToday           = date === today;
-  const [view, setView]   = useState<'swipe' | 'list'>(() => (isNarrowScreen() ? 'swipe' : 'list'));
 
   const { data: candidates = [], isLoading, isError } = useQuery({
     queryKey: ['attendance', 'batch-candidates', batch, track],
@@ -105,62 +96,28 @@ export function BatchAttendancePage() {
       </div>
 
       {isToday ? (
-        <>
-          {/* View toggle */}
-          <div className="flex justify-end mb-4">
-            <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-lg p-1 shrink-0">
-              <button
-                onClick={() => setView('swipe')}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
-                  view === 'swipe' ? 'bg-violet-600 text-white' : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                <Layers className="w-3.5 h-3.5" /> Swipe
-              </button>
-              <button
-                onClick={() => setView('list')}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
-                  view === 'list' ? 'bg-violet-600 text-white' : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                <LayoutList className="w-3.5 h-3.5" /> List
-              </button>
+        <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-5" style={{ minHeight: '60vh' }}>
+          {isLoading ? (
+            <div className="space-y-3 animate-pulse">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div key={i} className="h-12 bg-gray-100 rounded-lg" />
+              ))}
             </div>
-          </div>
-
-          {/* Body */}
-          <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-5" style={{ minHeight: '60vh' }}>
-            {isLoading ? (
-              <div className="space-y-3 animate-pulse">
-                {Array.from({ length: 8 }).map((_, i) => (
-                  <div key={i} className="h-12 bg-gray-100 rounded-lg" />
-                ))}
-              </div>
-            ) : isError ? (
-              <div className="text-center py-10 text-red-600 text-sm">
-                Failed to load candidates. Please try again.
-              </div>
-            ) : view === 'swipe' ? (
-              <SwipeAttendanceDeck
-                candidates={candidates}
-                batch={batch!}
-                track={track!}
-                date={date}
-                onSuccess={() => navigate('/faculty/batches')}
-                onCancel={() => navigate('/faculty/batches')}
-              />
-            ) : (
-              <BulkAttendanceForm
-                candidates={candidates}
-                batch={batch!}
-                track={track!}
-                date={date}
-                onSuccess={() => navigate('/faculty/batches')}
-                onCancel={() => navigate('/faculty/batches')}
-              />
-            )}
-          </div>
-        </>
+          ) : isError ? (
+            <div className="text-center py-10 text-red-600 text-sm">
+              Failed to load candidates. Please try again.
+            </div>
+          ) : (
+            <SwipeAttendanceDeck
+              candidates={candidates}
+              batch={batch!}
+              track={track!}
+              date={date}
+              onSuccess={() => navigate('/faculty/batches')}
+              onCancel={() => navigate('/faculty/batches')}
+            />
+          )}
+        </div>
       ) : (
         // Past/future dates are view-only — the server only accepts marking today's date.
         <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-5" style={{ minHeight: '60vh' }}>
