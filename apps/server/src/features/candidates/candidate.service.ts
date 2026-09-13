@@ -1,6 +1,6 @@
 import bcrypt from 'bcrypt';
 import { candidateRepository, FindCandidateOptions, PaginatedCandidates } from './candidate.repository';
-import { createCandidateSchema, updateCandidateSchema, createLoginSchema } from './candidate.validation';
+import { createCandidateSchema, updateCandidateSchema, createLoginSchema, updateFacultyNoteSchema } from './candidate.validation';
 import { ForbiddenError, NotFoundError, ValidationError } from '../../middlewares/errorHandler';
 import { ICandidate } from './candidate.model';
 import { AuthContext } from '../../lib/auth-context';
@@ -48,6 +48,16 @@ export const candidateService = {
 
   async update(id: string, rawInput: unknown, ctx: AuthContext): Promise<ICandidate> {
     const data = updateCandidateSchema.parse(rawInput);
+    const candidate = await candidateRepository.update(id, ctx.instituteId, { ...data, updatedBy: ctx.userId });
+    if (!candidate) throw new NotFoundError('Candidate');
+    return candidate;
+  },
+
+  /** Faculty-facing counterpart to update() — lets a teacher attach a note about a
+   *  student (e.g. from the attendance batch roster) without granting edit rights
+   *  over the rest of the candidate record. */
+  async updateFacultyNote(id: string, rawInput: unknown, ctx: AuthContext): Promise<ICandidate> {
+    const data = updateFacultyNoteSchema.parse(rawInput);
     const candidate = await candidateRepository.update(id, ctx.instituteId, { ...data, updatedBy: ctx.userId });
     if (!candidate) throw new NotFoundError('Candidate');
     return candidate;

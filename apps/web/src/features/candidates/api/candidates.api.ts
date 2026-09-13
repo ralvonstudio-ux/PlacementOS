@@ -55,6 +55,16 @@ export const candidatesApi = {
     } catch (err) { throw new Error(extractErrorMessage(err)); }
   },
 
+  /** Faculty-scoped: attach/update a note about a student from the batch roster.
+   *  Uses a separate endpoint from update() because faculty can't edit the rest
+   *  of the candidate record (roll number, department, etc.). */
+  async updateFacultyNote(id: string, facultyNote: string): Promise<Candidate> {
+    try {
+      const res = await apiClient.patch<ApiResponse<Candidate>>(`${BASE}/${id}/faculty-note`, { facultyNote });
+      return res.data.data!;
+    } catch (err) { throw new Error(extractErrorMessage(err)); }
+  },
+
   async remove(id: string): Promise<void> {
     try {
       await apiClient.delete(`${BASE}/${id}`);

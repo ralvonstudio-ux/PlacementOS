@@ -16,6 +16,7 @@ const FacultyDashboardPage = lazy(() => import('@/features/faculty-workspace/pag
 const FacultyBatchesPage = lazy(() => import('@/features/faculty-workspace/pages/FacultyBatchesPage').then((m) => ({ default: m.FacultyBatchesPage })));
 const FacultyAttendancePage = lazy(() => import('@/features/attendance/pages/FacultyAttendancePage').then((m) => ({ default: m.FacultyAttendancePage })));
 const BatchAttendancePage = lazy(() => import('@/features/attendance/pages/BatchAttendancePage').then((m) => ({ default: m.BatchAttendancePage })));
+const BatchRosterPage = lazy(() => import('@/features/attendance/pages/BatchRosterPage').then((m) => ({ default: m.BatchRosterPage })));
 const MyLeaveRequestsPage = lazy(() => import('@/features/leave-requests/pages/MyLeaveRequestsPage').then((m) => ({ default: m.MyLeaveRequestsPage })));
 const FacultyTrainingPlanPage = lazy(() => import('@/features/training-plan/pages/FacultyTrainingPlanPage').then((m) => ({ default: m.FacultyTrainingPlanPage })));
 const QuestionBankLandingPage = lazy(() => import('@/features/question-bank/pages/QuestionBankLandingPage').then((m) => ({ default: m.QuestionBankLandingPage })));
@@ -93,6 +94,7 @@ export const router = createBrowserRouter([
                   { path: 'attendance', element: <FacultyAttendancePage /> },
                   { path: 'batches', element: <FacultyBatchesPage /> },
                   { path: 'attendance/:batch/:track', element: <BatchAttendancePage /> },
+                  { path: 'attendance/:batch/:track/roster', element: <BatchRosterPage /> },
                   { path: 'leave-requests', element: <MyLeaveRequestsPage /> },
                   { path: 'training-plan', element: <FacultyTrainingPlanPage /> },
                   { path: 'question-bank', element: <QuestionBankLandingPage /> },
