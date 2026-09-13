@@ -21,6 +21,7 @@ import {
   ShieldCheck,
   Code2,
   ClipboardCheck,
+  CalendarClock,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
@@ -32,9 +33,11 @@ const NAV_ITEMS_FACULTY = [
   { label: 'My Dashboard', icon: LayoutDashboard, path: '/faculty', end: true },
   { label: 'Attendance', icon: ClipboardCheck, path: '/faculty/attendance', end: false },
   { label: 'My Batches', icon: BookOpen, path: '/faculty/batches', end: false },
-  { label: 'Training Plan', icon: Sparkles, path: '/faculty/training-plan', end: false },
+  { label: 'Academic Plan', icon: Sparkles, path: '/faculty/academic-plan', end: false },
+  { label: 'Training Plan', icon: CalendarClock, path: '/faculty/training-plan', end: false },
   { label: 'Question Bank', icon: Library, path: '/faculty/question-bank', end: false },
   { label: 'Worksheets', icon: FileCheck2, path: '/faculty/worksheets', end: false },
+  { label: 'Tests', icon: ShieldCheck, path: '/faculty/tests', end: false },
   { label: 'Leave Requests', icon: CalendarOff, path: '/faculty/leave-requests', end: false },
   { label: 'My Profile', icon: User2, path: '/faculty/profile', end: false },
 ] as const;

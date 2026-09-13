@@ -1,6 +1,6 @@
 import mongoose, { Document, Schema } from 'mongoose';
 
-export type TestStatus = 'draft' | 'published' | 'closed';
+export type TestStatus = 'draft' | 'pending_approval' | 'approved' | 'rejected' | 'published' | 'closed';
 export type TestQuestionType = 'mcq' | 'short_answer';
 
 export interface ITestQuestionSnapshot {
@@ -21,6 +21,19 @@ export interface ITest extends Document {
   durationMinutes: number;
   violationLimit: number;
   status: TestStatus;
+  /** The faculty-given label for the uploaded/pasted source material, and the topic
+   *  it covers — both optional, only meaningful when the test was AI-drafted. */
+  contentName?: string;
+  topic?: string;
+  /** Raw pasted/extracted text this test was generated from, when aiGenerated is true. */
+  sourceContent?: string;
+  aiGenerated?: boolean;
+  /** AI's own short review of the draft, shown to the faculty member before they edit it. */
+  aiReview?: string;
+  /** Set by whoever approves/rejects a pending_approval test. */
+  reviewNote?: string;
+  reviewedBy?: string;
+  reviewedAt?: Date;
   createdBy: string;
   isDeleted: boolean;
   deletedAt?: Date;
@@ -49,7 +62,15 @@ const testSchema = new Schema<ITest>(
     totalMarks: { type: Number, required: true, min: 0 },
     durationMinutes: { type: Number, required: true, min: 1 },
     violationLimit: { type: Number, required: true, min: 1, default: 3 },
-    status: { type: String, enum: ['draft', 'published', 'closed'], default: 'draft' },
+    status: { type: String, enum: ['draft', 'pending_approval', 'approved', 'rejected', 'published', 'closed'], default: 'draft' },
+    contentName: { type: String, trim: true },
+    topic: { type: String, trim: true },
+    sourceContent: { type: String },
+    aiGenerated: { type: Boolean, default: false },
+    aiReview: { type: String },
+    reviewNote: { type: String, trim: true },
+    reviewedBy: { type: String },
+    reviewedAt: { type: Date },
     createdBy: { type: String, required: true },
     isDeleted: { type: Boolean, default: false },
     deletedAt: { type: Date },

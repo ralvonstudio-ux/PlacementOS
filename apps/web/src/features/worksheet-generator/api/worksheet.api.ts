@@ -3,7 +3,9 @@ import type {
   ApiResponse,
   PaginatedResponse,
   GenerateWorksheetPayload,
+  GenerateWorksheetFromContentPayload,
   WorksheetDraft,
+  WorksheetFromContentDraft,
   SaveWorksheetPayload,
   GeneratedWorksheet,
   WorksheetListOptions,
@@ -15,6 +17,13 @@ export const worksheetApi = {
   async generate(payload: GenerateWorksheetPayload): Promise<WorksheetDraft> {
     try {
       const res = await apiClient.post<ApiResponse<WorksheetDraft>>(`${BASE}/generate`, payload);
+      return res.data.data!;
+    } catch (err) { throw new Error(extractErrorMessage(err)); }
+  },
+
+  async generateFromContent(payload: GenerateWorksheetFromContentPayload): Promise<WorksheetFromContentDraft> {
+    try {
+      const res = await apiClient.post<ApiResponse<WorksheetFromContentDraft>>(`${BASE}/generate-from-content`, payload);
       return res.data.data!;
     } catch (err) { throw new Error(extractErrorMessage(err)); }
   },
