@@ -18,7 +18,6 @@ interface Props {
 }
 
 const SWIPE_THRESHOLD = 72;
-const SWIPE_REVEAL_MAX = 160; // px of drag at which the colored reveal panel is fully opaque/solid
 
 function initialsOf(name: string): string {
   return name.split(' ').map((n) => n[0]).filter(Boolean).slice(0, 2).join('').toUpperCase();
@@ -46,7 +45,6 @@ function SwipeRow({
   candidate,
   status,
   expanded,
-  tapEnabled,
   onMark,
   onUnmark,
   onToggleExpand,
@@ -55,19 +53,19 @@ function SwipeRow({
   candidate: Candidate;
   status?: AttendanceStatus;
   expanded: boolean;
-  tapEnabled: boolean;
   onMark: (id: string, status: AttendanceStatus) => void;
   onUnmark: (id: string) => void;
   onToggleExpand: (id: string) => void;
 }) {
   const x = useMotionValue(0);
-  // Reveal panels grow in solid color proportional to drag distance (not just a fading
-  // icon) so the row reads clearly as "about to become red" / "about to become green"
-  // mid-gesture, matching a real swipe-to-confirm control.
-  const absentWidth = useTransform(x, [-SWIPE_REVEAL_MAX, 0], [SWIPE_REVEAL_MAX, 0], { clamp: true });
-  const presentWidth = useTransform(x, [0, SWIPE_REVEAL_MAX], [0, SWIPE_REVEAL_MAX], { clamp: true });
-  const absentLabelOpacity = useTransform(x, [-SWIPE_THRESHOLD, -SWIPE_THRESHOLD * 0.5], [1, 0]);
-  const presentLabelOpacity = useTransform(x, [SWIPE_THRESHOLD * 0.5, SWIPE_THRESHOLD], [0, 1]);
+  // Full-bleed reveal: each panel scales up from the edge the card is sliding away
+  // from, reaching 100% of the row's width (not a fixed px cap) right as the drag
+  // crosses the mark threshold — so the row reads as fully, solidly red/green at
+  // the same moment it's about to commit, not a thin sliver alongside white space.
+  const presentScale = useTransform(x, [0, SWIPE_THRESHOLD], [0, 1], { clamp: true });
+  const absentScale = useTransform(x, [-SWIPE_THRESHOLD, 0], [1, 0], { clamp: true });
+  const presentLabelOpacity = useTransform(x, [SWIPE_THRESHOLD * 0.35, SWIPE_THRESHOLD * 0.75], [0, 1]);
+  const absentLabelOpacity = useTransform(x, [-SWIPE_THRESHOLD * 0.75, -SWIPE_THRESHOLD * 0.35], [1, 0]);
   const marked = status !== undefined;
   // A completed drag still fires a trailing click on release — without this guard,
   // every swipe-to-mark also popped open the tap-to-expand strip underneath it.
@@ -87,29 +85,30 @@ function SwipeRow({
       draggedRef.current = false;
       return;
     }
-    if (tapEnabled) onToggleExpand(candidate._id);
+    onToggleExpand(candidate._id);
   }
 
   const style = status ? STATUS_STYLE[status] : null;
 
   return (
     <div className="relative overflow-hidden rounded-xl">
-      {/* Swipe-direction reveal — solid color panels anchored to the edge that opens up
-          as the card slides the other way, sized to the drag distance. */}
-      <div className="absolute inset-0 flex items-center justify-between pointer-events-none rounded-xl overflow-hidden">
+      {/* Swipe-direction reveal — each panel scales from 0 to the row's full width,
+          anchored to the edge the card is sliding away from, so the row goes fully
+          solid red/green rather than a partial strip. */}
+      <div className="absolute inset-0 rounded-xl overflow-hidden pointer-events-none">
         <motion.div
-          style={{ width: presentWidth, opacity: presentLabelOpacity }}
-          className="h-full bg-green-500 flex items-center pl-4 shrink-0"
+          style={{ scaleX: presentScale, opacity: presentLabelOpacity }}
+          className="absolute inset-0 bg-green-500 flex items-center pl-4 origin-left"
         >
-          <span className="flex items-center gap-1 text-white font-bold text-xs whitespace-nowrap">
+          <span className="flex items-center gap-1.5 text-white font-bold text-xs whitespace-nowrap">
             <Check className="w-4 h-4" /> PRESENT
           </span>
         </motion.div>
         <motion.div
-          style={{ width: absentWidth, opacity: absentLabelOpacity }}
-          className="h-full bg-red-500 flex items-center justify-end pr-4 ml-auto shrink-0"
+          style={{ scaleX: absentScale, opacity: absentLabelOpacity }}
+          className="absolute inset-0 bg-red-500 flex items-center justify-end pr-4 origin-right"
         >
-          <span className="flex items-center gap-1 text-white font-bold text-xs whitespace-nowrap">
+          <span className="flex items-center gap-1.5 text-white font-bold text-xs whitespace-nowrap">
             ABSENT <X className="w-4 h-4" />
           </span>
         </motion.div>
@@ -119,87 +118,87 @@ function SwipeRow({
         style={{ x }}
         drag="x"
         dragConstraints={{ left: 0, right: 0 }}
-        dragElastic={0.6}
-        dragTransition={{ bounceStiffness: 500, bounceDamping: 42 }}
+        dragElastic={0.7}
+        dragTransition={{ bounceStiffness: 600, bounceDamping: 44 }}
         onDrag={handleDrag}
         onDragEnd={handleDragEnd}
         onClick={handleClick}
-        whileTap={{ cursor: 'grabbing', scale: 0.99 }}
-        transition={{ type: 'spring', stiffness: 500, damping: 40 }}
-        className={`relative flex items-center gap-3 px-4 py-3.5 bg-white border rounded-xl select-none touch-pan-y cursor-grab ${
+        whileDrag={{ boxShadow: '0 10px 28px -6px rgba(0,0,0,0.18)' }}
+        whileTap={{ cursor: 'grabbing' }}
+        transition={{ type: 'spring', stiffness: 550, damping: 46, mass: 0.7 }}
+        className={`relative flex items-center gap-2.5 px-3 py-3 bg-white border rounded-xl select-none touch-pan-y cursor-grab ${
           marked && style ? `${style.bg} ${style.ring} ring-1 border-transparent` : 'border-gray-100'
         }`}
       >
-        <span className="w-4 text-[11px] text-gray-300 shrink-0">{index}</span>
-        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-violet-500 to-pink-500 text-white flex items-center justify-center text-xs font-bold shrink-0">
+        <span className="w-3.5 text-[10px] text-gray-300 shrink-0 text-center">{index}</span>
+        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-violet-500 to-pink-500 text-white flex items-center justify-center text-xs font-bold shrink-0">
           {initialsOf(candidate.fullName)}
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-gray-900 truncate">{candidate.fullName}</p>
-          <p className="text-xs text-gray-400">{candidate.rollNumber}</p>
+          <p className="text-[11px] text-gray-400 truncate">{candidate.rollNumber}</p>
         </div>
 
         {marked && style ? (
-          <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${style.bg} ${style.text} shrink-0`}>{style.label}</span>
+          <span className={`text-[11px] font-semibold px-2 py-1 rounded-full whitespace-nowrap shrink-0 ${style.bg} ${style.text}`}>{style.label}</span>
         ) : (
-          <span className="text-[11px] text-gray-300 font-medium tracking-wide shrink-0">SWIPE TO MARK</span>
+          <span className="text-[10px] text-gray-300 font-medium tracking-wide shrink-0 whitespace-nowrap">SWIPE</span>
         )}
-
-        {/* Escape hatch for the two states a left/right swipe can't reach */}
-        <div className="flex items-center gap-1 shrink-0">
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); onMark(candidate._id, 'late'); }}
-            aria-label="Mark late"
-            className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${
-              status === 'late' ? 'bg-yellow-500 text-white' : 'text-gray-300 hover:text-yellow-500 hover:bg-yellow-50'
-            }`}
-          >
-            <Clock className="w-3.5 h-3.5" />
-          </button>
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); onMark(candidate._id, 'excused'); }}
-            aria-label="Mark excused"
-            className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${
-              status === 'excused' ? 'bg-blue-500 text-white' : 'text-gray-300 hover:text-blue-500 hover:bg-blue-50'
-            }`}
-          >
-            <CalendarOff className="w-3.5 h-3.5" />
-          </button>
-        </div>
       </motion.div>
 
-      {/* Tap-to-expand quick actions — Present / Absent / Unmark, for anyone who'd
+      {/* Tap-to-expand quick actions — everything a swipe can't reach in one place:
+          Present / Absent / Unmark, plus the Late / Excused states, for anyone who'd
           rather tap than swipe. */}
       {expanded && (
-        <div className="flex items-center gap-2 px-4 py-2.5 bg-gray-50/80 border border-t-0 border-gray-100 rounded-b-xl -mt-px">
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); onMark(candidate._id, 'present'); }}
-            className={`flex-1 h-8 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-colors ${
-              status === 'present' ? 'bg-green-600 text-white' : 'bg-white border border-green-200 text-green-700 hover:bg-green-50'
-            }`}
-          >
-            <Check className="w-3.5 h-3.5" /> Present
-          </button>
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); onMark(candidate._id, 'absent'); }}
-            className={`flex-1 h-8 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-colors ${
-              status === 'absent' ? 'bg-red-600 text-white' : 'bg-white border border-red-200 text-red-700 hover:bg-red-50'
-            }`}
-          >
-            <X className="w-3.5 h-3.5" /> Absent
-          </button>
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); onUnmark(candidate._id); }}
-            disabled={!marked}
-            className="flex-1 h-8 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 bg-white border border-gray-200 text-gray-500 hover:bg-gray-100 disabled:opacity-40 transition-colors"
-          >
-            <RotateCcw className="w-3.5 h-3.5" /> Unmark
-          </button>
+        <div className="px-3 py-2.5 bg-gray-50/80 border border-t-0 border-gray-100 rounded-b-xl -mt-px space-y-1.5">
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onMark(candidate._id, 'present'); }}
+              className={`flex-1 h-8 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-colors ${
+                status === 'present' ? 'bg-green-600 text-white' : 'bg-white border border-green-200 text-green-700 hover:bg-green-50'
+              }`}
+            >
+              <Check className="w-3.5 h-3.5" /> Present
+            </button>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onMark(candidate._id, 'absent'); }}
+              className={`flex-1 h-8 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-colors ${
+                status === 'absent' ? 'bg-red-600 text-white' : 'bg-white border border-red-200 text-red-700 hover:bg-red-50'
+              }`}
+            >
+              <X className="w-3.5 h-3.5" /> Absent
+            </button>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onUnmark(candidate._id); }}
+              disabled={!marked}
+              className="flex-1 h-8 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 bg-white border border-gray-200 text-gray-500 hover:bg-gray-100 disabled:opacity-40 transition-colors"
+            >
+              <RotateCcw className="w-3.5 h-3.5" /> Unmark
+            </button>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onMark(candidate._id, 'late'); }}
+              className={`flex-1 h-8 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-colors ${
+                status === 'late' ? 'bg-yellow-500 text-white' : 'bg-white border border-yellow-200 text-yellow-700 hover:bg-yellow-50'
+              }`}
+            >
+              <Clock className="w-3.5 h-3.5" /> Late
+            </button>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onMark(candidate._id, 'excused'); }}
+              className={`flex-1 h-8 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-colors ${
+                status === 'excused' ? 'bg-blue-500 text-white' : 'bg-white border border-blue-200 text-blue-700 hover:bg-blue-50'
+              }`}
+            >
+              <CalendarOff className="w-3.5 h-3.5" /> Excused
+            </button>
+          </div>
         </div>
       )}
     </div>
@@ -214,7 +213,6 @@ export function SwipeAttendanceDeck({ candidates, batch, track, date, onSuccess,
   const [showSearch, setShowSearch] = useState(false);
   const [showFilterMenu, setShowFilterMenu] = useState(false);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
-  const [tapToEdit, setTapToEdit] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const historyRef = useRef<{ id: string; prev: AttendanceStatus | undefined }[]>([]);
 
@@ -318,38 +316,21 @@ export function SwipeAttendanceDeck({ candidates, batch, track, date, onSuccess,
       </div>
 
       {/* Toolbar */}
-      <div className="flex items-center gap-2 mb-4">
+      <div className="flex items-center gap-1.5 sm:gap-2 mb-4">
         <button
           type="button"
           onClick={markAllPresent}
-          className="flex-1 h-10 rounded-xl bg-gradient-to-r from-violet-600 to-pink-500 text-white text-sm font-semibold shadow-sm hover:opacity-90 transition-opacity"
+          className="flex-1 h-9 sm:h-10 rounded-xl bg-gradient-to-r from-violet-600 to-pink-500 text-white text-xs sm:text-sm font-semibold shadow-sm hover:opacity-90 transition-opacity px-2"
         >
           All Present
-        </button>
-
-        {/* Tap-to-edit toggle — when on, tapping a row opens its Present/Absent/Unmark
-            strip; when off, taps are ignored so a long swipe session can't misfire. */}
-        <button
-          type="button"
-          role="switch"
-          aria-checked={tapToEdit}
-          aria-label="Tap to edit"
-          onClick={() => setTapToEdit((v) => !v)}
-          className={`relative w-11 h-6 rounded-full shrink-0 transition-colors ${tapToEdit ? 'bg-violet-600' : 'bg-gray-200'}`}
-        >
-          <span
-            className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
-              tapToEdit ? 'translate-x-5' : 'translate-x-0.5'
-            }`}
-          />
         </button>
 
         <button
           type="button"
           onClick={() => { setShowSearch((v) => !v); setShowFilterMenu(false); }}
           aria-label="Search"
-          className={`w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 transition-colors ${
-            showSearch ? 'bg-violet-50 border-violet-200 text-violet-600' : 'border-gray-200 text-gray-400 hover:text-gray-600'
+          className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl border flex items-center justify-center shrink-0 transition-colors ${
+            showSearch ? 'bg-violet-50 border-violet-200 text-violet-600' : 'border-gray-200 text-gray-500 hover:text-gray-700'
           }`}
         >
           <Search className="w-4 h-4" />
@@ -360,14 +341,14 @@ export function SwipeAttendanceDeck({ candidates, batch, track, date, onSuccess,
             type="button"
             onClick={() => { setShowFilterMenu((v) => !v); setShowSearch(false); }}
             aria-label="Filter"
-            className={`w-10 h-10 rounded-xl border flex items-center justify-center transition-colors ${
-              showFilterMenu || statusFilter !== 'all' ? 'bg-violet-50 border-violet-200 text-violet-600' : 'border-gray-200 text-gray-400 hover:text-gray-600'
+            className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl border flex items-center justify-center transition-colors ${
+              showFilterMenu || statusFilter !== 'all' ? 'bg-violet-50 border-violet-200 text-violet-600' : 'border-gray-200 text-gray-500 hover:text-gray-700'
             }`}
           >
             <SlidersHorizontal className="w-4 h-4" />
           </button>
           {showFilterMenu && (
-            <div className="absolute right-0 top-12 z-10 w-44 bg-white border border-gray-200 rounded-xl shadow-lg py-1.5">
+            <div className="absolute right-0 top-11 z-10 w-44 bg-white border border-gray-200 rounded-xl shadow-lg py-1.5">
               {FILTER_OPTIONS.map((opt) => (
                 <button
                   key={opt.value}
@@ -388,7 +369,7 @@ export function SwipeAttendanceDeck({ candidates, batch, track, date, onSuccess,
           type="button"
           onClick={() => navigate(`/faculty/attendance/${batch}/${track}/roster`)}
           aria-label="View batch roster"
-          className="w-10 h-10 rounded-xl border border-gray-200 text-gray-400 hover:text-gray-600 flex items-center justify-center shrink-0 transition-colors"
+          className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl border border-gray-200 text-gray-500 hover:text-gray-700 flex items-center justify-center shrink-0 transition-colors"
         >
           <Users className="w-4 h-4" />
         </button>
@@ -398,7 +379,7 @@ export function SwipeAttendanceDeck({ candidates, batch, track, date, onSuccess,
           onClick={undoLast}
           disabled={historyRef.current.length === 0}
           aria-label="Undo last"
-          className="w-10 h-10 rounded-xl border border-gray-200 text-gray-400 hover:text-gray-600 flex items-center justify-center shrink-0 disabled:opacity-30 disabled:hover:text-gray-400 transition-colors"
+          className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl border border-gray-200 text-gray-500 hover:text-gray-700 flex items-center justify-center shrink-0 disabled:opacity-30 disabled:hover:text-gray-500 transition-colors"
         >
           <Undo2 className="w-4 h-4" />
         </button>
@@ -424,7 +405,6 @@ export function SwipeAttendanceDeck({ candidates, batch, track, date, onSuccess,
             candidate={c}
             status={statuses[c._id]}
             expanded={expandedId === c._id}
-            tapEnabled={tapToEdit}
             onMark={mark}
             onUnmark={unmark}
             onToggleExpand={toggleExpand}
