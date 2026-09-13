@@ -129,10 +129,10 @@ export function BulkAttendanceForm({ candidates, batch, track, date, onSuccess, 
       {/* Candidate rows */}
       <div className="flex-1 overflow-y-auto divide-y divide-gray-100 rounded-xl border border-gray-200 bg-white">
         {rows.map((row, idx) => (
-          <div key={row.candidateId} className="flex items-center gap-3 px-4 py-3">
+          <div key={row.candidateId} className="flex flex-wrap items-center gap-3 px-4 py-3">
             {/* Index + name */}
             <span className="w-6 text-xs text-gray-400 shrink-0">{idx + 1}</span>
-            <div className="flex-1 min-w-0">
+            <div className="flex-1 min-w-[8rem]">
               <p className="text-sm font-medium text-gray-900 truncate">{row.fullName}</p>
               <p className="text-xs text-gray-400">{row.rollNumber}</p>
             </div>
@@ -161,7 +161,7 @@ export function BulkAttendanceForm({ candidates, batch, track, date, onSuccess, 
               placeholder="Note (optional)"
               value={row.note}
               onChange={(e) => setNote(row.candidateId, e.target.value)}
-              className="w-36 shrink-0 text-xs border border-gray-200 rounded-lg px-2 py-1.5 text-gray-700 placeholder-gray-300 focus:outline-none focus:border-[#4F46E5]"
+              className="w-full sm:w-36 shrink-0 text-xs border border-gray-200 rounded-lg px-2 py-1.5 text-gray-700 placeholder-gray-300 focus:outline-none focus:border-[#4F46E5]"
             />
           </div>
         ))}

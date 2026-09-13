@@ -34,7 +34,9 @@ export const candidatesApi = {
 
   async listByBatch(batch: string, track?: string): Promise<Candidate[]> {
     try {
-      const res = await apiClient.get<PaginatedResponse<Candidate>>(BASE, { params: { batch, track, status: 'active', limit: 300 } });
+      // 200 is the server's hard cap (listCandidateSchema) — requesting above it was a
+      // 400 every time, which meant every "Mark Attendance" click failed unconditionally.
+      const res = await apiClient.get<PaginatedResponse<Candidate>>(BASE, { params: { batch, track, status: 'active', limit: 200 } });
       return res.data.data ?? [];
     } catch (err) { throw new Error(extractErrorMessage(err)); }
   },

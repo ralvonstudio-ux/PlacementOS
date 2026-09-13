@@ -20,28 +20,30 @@ export function TpoInsightsPage() {
         ) : sorted.length === 0 ? (
           <EmptyState icon={TrendingDown} title="No attendance data yet" description="Insights will appear once faculty start marking attendance." />
         ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-100 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                <th className="px-5 py-3">Batch</th>
-                <th className="px-5 py-3">Track</th>
-                <th className="px-5 py-3 text-right">Records</th>
-                <th className="px-5 py-3 text-right">Attendance Rate</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {sorted.map((row) => (
-                <tr key={`${row.batch}-${row.track}`}>
-                  <td className="px-5 py-3 font-medium text-gray-900">{row.batch}</td>
-                  <td className="px-5 py-3 text-gray-600">{row.track}</td>
-                  <td className="px-5 py-3 text-right text-gray-500">{row.total}</td>
-                  <td className={`px-5 py-3 text-right font-semibold ${row.rate < 75 ? 'text-red-600' : row.rate < 85 ? 'text-amber-600' : 'text-green-600'}`}>
-                    {row.rate}%
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[480px]">
+              <thead>
+                <tr className="border-b border-gray-100 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                  <th className="px-5 py-3">Batch</th>
+                  <th className="px-5 py-3">Track</th>
+                  <th className="px-5 py-3 text-right">Records</th>
+                  <th className="px-5 py-3 text-right">Attendance Rate</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {sorted.map((row) => (
+                  <tr key={`${row.batch}-${row.track}`}>
+                    <td className="px-5 py-3 font-medium text-gray-900 whitespace-nowrap">{row.batch}</td>
+                    <td className="px-5 py-3 text-gray-600 whitespace-nowrap">{row.track}</td>
+                    <td className="px-5 py-3 text-right text-gray-500">{row.total}</td>
+                    <td className={`px-5 py-3 text-right font-semibold ${row.rate < 75 ? 'text-red-600' : row.rate < 85 ? 'text-amber-600' : 'text-green-600'}`}>
+                      {row.rate}%
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </PageContainer>

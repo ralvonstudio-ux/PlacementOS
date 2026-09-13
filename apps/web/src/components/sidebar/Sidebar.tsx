@@ -20,6 +20,7 @@ import {
   BookMarked,
   ShieldCheck,
   Code2,
+  ClipboardCheck,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
@@ -29,6 +30,7 @@ import { getHomePathForRole } from '@/features/auth/utils/roleHome';
 
 const NAV_ITEMS_FACULTY = [
   { label: 'My Dashboard', icon: LayoutDashboard, path: '/faculty', end: true },
+  { label: 'Attendance', icon: ClipboardCheck, path: '/faculty/attendance', end: false },
   { label: 'My Batches', icon: BookOpen, path: '/faculty/batches', end: false },
   { label: 'Training Plan', icon: Sparkles, path: '/faculty/training-plan', end: false },
   { label: 'Question Bank', icon: Library, path: '/faculty/question-bank', end: false },
@@ -39,6 +41,7 @@ const NAV_ITEMS_FACULTY = [
 
 const NAV_SECTION_TPO_OVERVIEW = [
   { label: 'Dashboard', icon: LayoutDashboard, path: '/tpo', end: true },
+  { label: 'Attendance', icon: ClipboardCheck, path: '/tpo/attendance', end: false },
   { label: 'Insights', icon: Sparkles, path: '/tpo/insights', end: false },
 ] as const;
 
