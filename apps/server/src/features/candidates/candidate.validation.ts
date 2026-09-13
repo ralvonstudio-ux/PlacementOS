@@ -13,6 +13,12 @@ export const createCandidateSchema = z.object({
 
 export const updateCandidateSchema = createCandidateSchema.partial();
 
+/** Faculty-scoped update — only the note, never roll number/department/etc. which stay
+ *  admin/TPO-only via updateCandidateSchema. */
+export const updateFacultyNoteSchema = z.object({
+  facultyNote: z.string().max(2000).trim().optional().default(''),
+});
+
 export const createLoginSchema = z.object({
   loginEmail: z.string().email('Enter a valid email address').toLowerCase(),
   password: z.string().min(8, 'Password must be at least 8 characters'),

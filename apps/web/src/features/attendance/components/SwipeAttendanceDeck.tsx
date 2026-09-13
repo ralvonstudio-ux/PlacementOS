@@ -1,6 +1,10 @@
 import { useState, useMemo, useRef } from 'react';
 import { motion, useMotionValue, useTransform, type PanInfo } from 'framer-motion';
-import { Check, X, Clock, CalendarOff, Search, CheckCircle2, XCircle, Undo2 } from 'lucide-react';
+import {
+  Check, X, Clock, CalendarOff, Search, CheckCircle2, XCircle, Undo2,
+  SlidersHorizontal, Users, RotateCcw,
+} from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import type { AttendanceStatus, Candidate } from '@placementos/types';
 import { useBulkMarkAttendance } from '../hooks/useAttendance';
 
@@ -14,6 +18,7 @@ interface Props {
 }
 
 const SWIPE_THRESHOLD = 72;
+const SWIPE_REVEAL_MAX = 160; // px of drag at which the colored reveal panel is fully opaque/solid
 
 function initialsOf(name: string): string {
   return name.split(' ').map((n) => n[0]).filter(Boolean).slice(0, 2).join('').toUpperCase();
@@ -26,41 +31,88 @@ const STATUS_STYLE: Record<AttendanceStatus, { label: string; bg: string; text: 
   excused: { label: 'Excused', bg: 'bg-blue-50', text: 'text-blue-700', ring: 'ring-blue-200' },
 };
 
+type StatusFilter = 'all' | 'present' | 'absent' | 'unmarked';
+
 /** One roster row — swipe it right to mark present, left to mark absent. The whole row
  *  is the drag surface (not a separate full-screen card), so the candidate stays in
  *  scannable list context the way a register does, and a long roster reads top to bottom
- *  the same as any other list — swiping is the fast path, not the only path. */
+ *  the same as any other list — swiping is the fast path, not the only path.
+ *
+ *  Tapping the name/avatar area (rather than dragging) expands an inline Present /
+ *  Absent / Unmark strip — a slower, explicit alternative to swiping, gated by the
+ *  toolbar's "Tap to edit" toggle so a stray tap on a long list can't misfire. */
 function SwipeRow({
+  index,
   candidate,
   status,
+  expanded,
+  tapEnabled,
   onMark,
+  onUnmark,
+  onToggleExpand,
 }: {
+  index: number;
   candidate: Candidate;
   status?: AttendanceStatus;
+  expanded: boolean;
+  tapEnabled: boolean;
   onMark: (id: string, status: AttendanceStatus) => void;
+  onUnmark: (id: string) => void;
+  onToggleExpand: (id: string) => void;
 }) {
   const x = useMotionValue(0);
-  const presentOpacity = useTransform(x, [10, SWIPE_THRESHOLD], [0, 1]);
-  const absentOpacity = useTransform(x, [-SWIPE_THRESHOLD, -10], [1, 0]);
+  // Reveal panels grow in solid color proportional to drag distance (not just a fading
+  // icon) so the row reads clearly as "about to become red" / "about to become green"
+  // mid-gesture, matching a real swipe-to-confirm control.
+  const absentWidth = useTransform(x, [-SWIPE_REVEAL_MAX, 0], [SWIPE_REVEAL_MAX, 0], { clamp: true });
+  const presentWidth = useTransform(x, [0, SWIPE_REVEAL_MAX], [0, SWIPE_REVEAL_MAX], { clamp: true });
+  const absentLabelOpacity = useTransform(x, [-SWIPE_THRESHOLD, -SWIPE_THRESHOLD * 0.5], [1, 0]);
+  const presentLabelOpacity = useTransform(x, [SWIPE_THRESHOLD * 0.5, SWIPE_THRESHOLD], [0, 1]);
   const marked = status !== undefined;
+  // A completed drag still fires a trailing click on release — without this guard,
+  // every swipe-to-mark also popped open the tap-to-expand strip underneath it.
+  const draggedRef = useRef(false);
+
+  function handleDrag(_e: unknown, info: PanInfo) {
+    if (Math.abs(info.offset.x) > 5) draggedRef.current = true;
+  }
 
   function handleDragEnd(_e: unknown, info: PanInfo) {
     if (info.offset.x > SWIPE_THRESHOLD) onMark(candidate._id, 'present');
     else if (info.offset.x < -SWIPE_THRESHOLD) onMark(candidate._id, 'absent');
   }
 
+  function handleClick() {
+    if (draggedRef.current) {
+      draggedRef.current = false;
+      return;
+    }
+    if (tapEnabled) onToggleExpand(candidate._id);
+  }
+
   const style = status ? STATUS_STYLE[status] : null;
 
   return (
     <div className="relative overflow-hidden rounded-xl">
-      {/* Swipe-direction hints revealed behind the row while dragging */}
-      <div className="absolute inset-0 flex items-center justify-between px-4 pointer-events-none">
-        <motion.span style={{ opacity: absentOpacity }} className="flex items-center gap-1 text-red-600 font-bold text-xs">
-          <X className="w-4 h-4" /> ABSENT
-        </motion.span>
-        <motion.span style={{ opacity: presentOpacity }} className="flex items-center gap-1 text-green-600 font-bold text-xs">
-          PRESENT <Check className="w-4 h-4" />
-        </motion.span>
+      {/* Swipe-direction reveal — solid color panels anchored to the edge that opens up
+          as the card slides the other way, sized to the drag distance. */}
+      <div className="absolute inset-0 flex items-center justify-between pointer-events-none rounded-xl overflow-hidden">
+        <motion.div
+          style={{ width: presentWidth, opacity: presentLabelOpacity }}
+          className="h-full bg-green-500 flex items-center pl-4 shrink-0"
+        >
+          <span className="flex items-center gap-1 text-white font-bold text-xs whitespace-nowrap">
+            <Check className="w-4 h-4" /> PRESENT
+          </span>
+        </motion.div>
+        <motion.div
+          style={{ width: absentWidth, opacity: absentLabelOpacity }}
+          className="h-full bg-red-500 flex items-center justify-end pr-4 ml-auto shrink-0"
+        >
+          <span className="flex items-center gap-1 text-white font-bold text-xs whitespace-nowrap">
+            ABSENT <X className="w-4 h-4" />
+          </span>
+        </motion.div>
       </div>
 
       <motion.div
@@ -68,12 +120,17 @@ function SwipeRow({
         drag="x"
         dragConstraints={{ left: 0, right: 0 }}
         dragElastic={0.6}
+        dragTransition={{ bounceStiffness: 500, bounceDamping: 42 }}
+        onDrag={handleDrag}
         onDragEnd={handleDragEnd}
-        whileTap={{ cursor: 'grabbing' }}
+        onClick={handleClick}
+        whileTap={{ cursor: 'grabbing', scale: 0.99 }}
+        transition={{ type: 'spring', stiffness: 500, damping: 40 }}
         className={`relative flex items-center gap-3 px-4 py-3.5 bg-white border rounded-xl select-none touch-pan-y cursor-grab ${
           marked && style ? `${style.bg} ${style.ring} ring-1 border-transparent` : 'border-gray-100'
         }`}
       >
+        <span className="w-4 text-[11px] text-gray-300 shrink-0">{index}</span>
         <div className="w-10 h-10 rounded-full bg-gradient-to-br from-violet-500 to-pink-500 text-white flex items-center justify-center text-xs font-bold shrink-0">
           {initialsOf(candidate.fullName)}
         </div>
@@ -92,7 +149,7 @@ function SwipeRow({
         <div className="flex items-center gap-1 shrink-0">
           <button
             type="button"
-            onClick={() => onMark(candidate._id, 'late')}
+            onClick={(e) => { e.stopPropagation(); onMark(candidate._id, 'late'); }}
             aria-label="Mark late"
             className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${
               status === 'late' ? 'bg-yellow-500 text-white' : 'text-gray-300 hover:text-yellow-500 hover:bg-yellow-50'
@@ -102,7 +159,7 @@ function SwipeRow({
           </button>
           <button
             type="button"
-            onClick={() => onMark(candidate._id, 'excused')}
+            onClick={(e) => { e.stopPropagation(); onMark(candidate._id, 'excused'); }}
             aria-label="Mark excused"
             className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${
               status === 'excused' ? 'bg-blue-500 text-white' : 'text-gray-300 hover:text-blue-500 hover:bg-blue-50'
@@ -112,22 +169,63 @@ function SwipeRow({
           </button>
         </div>
       </motion.div>
+
+      {/* Tap-to-expand quick actions — Present / Absent / Unmark, for anyone who'd
+          rather tap than swipe. */}
+      {expanded && (
+        <div className="flex items-center gap-2 px-4 py-2.5 bg-gray-50/80 border border-t-0 border-gray-100 rounded-b-xl -mt-px">
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onMark(candidate._id, 'present'); }}
+            className={`flex-1 h-8 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-colors ${
+              status === 'present' ? 'bg-green-600 text-white' : 'bg-white border border-green-200 text-green-700 hover:bg-green-50'
+            }`}
+          >
+            <Check className="w-3.5 h-3.5" /> Present
+          </button>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onMark(candidate._id, 'absent'); }}
+            className={`flex-1 h-8 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-colors ${
+              status === 'absent' ? 'bg-red-600 text-white' : 'bg-white border border-red-200 text-red-700 hover:bg-red-50'
+            }`}
+          >
+            <X className="w-3.5 h-3.5" /> Absent
+          </button>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onUnmark(candidate._id); }}
+            disabled={!marked}
+            className="flex-1 h-8 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 bg-white border border-gray-200 text-gray-500 hover:bg-gray-100 disabled:opacity-40 transition-colors"
+          >
+            <RotateCcw className="w-3.5 h-3.5" /> Unmark
+          </button>
+        </div>
+      )}
     </div>
   );
 }
 
 export function SwipeAttendanceDeck({ candidates, batch, track, date, onSuccess, onCancel }: Props) {
+  const navigate = useNavigate();
   const { mutateAsync: bulkMark, isPending } = useBulkMarkAttendance();
   const [statuses, setStatuses] = useState<Record<string, AttendanceStatus>>({});
   const [search, setSearch] = useState('');
   const [showSearch, setShowSearch] = useState(false);
+  const [showFilterMenu, setShowFilterMenu] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [tapToEdit, setTapToEdit] = useState(true);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const historyRef = useRef<{ id: string; prev: AttendanceStatus | undefined }[]>([]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return candidates;
-    return candidates.filter((c) => c.fullName.toLowerCase().includes(q) || c.rollNumber.toLowerCase().includes(q));
-  }, [candidates, search]);
+    let list = candidates;
+    if (q) list = list.filter((c) => c.fullName.toLowerCase().includes(q) || c.rollNumber.toLowerCase().includes(q));
+    if (statusFilter === 'unmarked') list = list.filter((c) => statuses[c._id] === undefined);
+    else if (statusFilter !== 'all') list = list.filter((c) => statuses[c._id] === statusFilter);
+    return list;
+  }, [candidates, search, statusFilter, statuses]);
 
   const counts = useMemo(() => {
     const c = { present: 0, absent: 0, late: 0, excused: 0 };
@@ -141,6 +239,15 @@ export function SwipeAttendanceDeck({ candidates, batch, track, date, onSuccess,
   function mark(id: string, status: AttendanceStatus) {
     historyRef.current.push({ id, prev: statuses[id] });
     setStatuses((prev) => ({ ...prev, [id]: status }));
+  }
+
+  function unmark(id: string) {
+    historyRef.current.push({ id, prev: statuses[id] });
+    setStatuses((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
   }
 
   function undoLast() {
@@ -161,6 +268,10 @@ export function SwipeAttendanceDeck({ candidates, batch, track, date, onSuccess,
     historyRef.current = [];
   }
 
+  function toggleExpand(id: string) {
+    setExpandedId((prev) => (prev === id ? null : id));
+  }
+
   async function handleSubmit() {
     await bulkMark({
       batch,
@@ -174,6 +285,13 @@ export function SwipeAttendanceDeck({ candidates, batch, track, date, onSuccess,
   if (candidates.length === 0) {
     return <div className="text-center py-10 text-gray-500">No candidates found for {batch} – {track}.</div>;
   }
+
+  const FILTER_OPTIONS: { value: StatusFilter; label: string }[] = [
+    { value: 'all', label: 'All students' },
+    { value: 'present', label: 'Marked present' },
+    { value: 'absent', label: 'Marked absent' },
+    { value: 'unmarked', label: 'Unmarked' },
+  ];
 
   return (
     <div className="flex flex-col">
@@ -208,9 +326,27 @@ export function SwipeAttendanceDeck({ candidates, batch, track, date, onSuccess,
         >
           All Present
         </button>
+
+        {/* Tap-to-edit toggle — when on, tapping a row opens its Present/Absent/Unmark
+            strip; when off, taps are ignored so a long swipe session can't misfire. */}
         <button
           type="button"
-          onClick={() => setShowSearch((v) => !v)}
+          role="switch"
+          aria-checked={tapToEdit}
+          aria-label="Tap to edit"
+          onClick={() => setTapToEdit((v) => !v)}
+          className={`relative w-11 h-6 rounded-full shrink-0 transition-colors ${tapToEdit ? 'bg-violet-600' : 'bg-gray-200'}`}
+        >
+          <span
+            className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
+              tapToEdit ? 'translate-x-5' : 'translate-x-0.5'
+            }`}
+          />
+        </button>
+
+        <button
+          type="button"
+          onClick={() => { setShowSearch((v) => !v); setShowFilterMenu(false); }}
           aria-label="Search"
           className={`w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 transition-colors ${
             showSearch ? 'bg-violet-50 border-violet-200 text-violet-600' : 'border-gray-200 text-gray-400 hover:text-gray-600'
@@ -218,6 +354,45 @@ export function SwipeAttendanceDeck({ candidates, batch, track, date, onSuccess,
         >
           <Search className="w-4 h-4" />
         </button>
+
+        <div className="relative shrink-0">
+          <button
+            type="button"
+            onClick={() => { setShowFilterMenu((v) => !v); setShowSearch(false); }}
+            aria-label="Filter"
+            className={`w-10 h-10 rounded-xl border flex items-center justify-center transition-colors ${
+              showFilterMenu || statusFilter !== 'all' ? 'bg-violet-50 border-violet-200 text-violet-600' : 'border-gray-200 text-gray-400 hover:text-gray-600'
+            }`}
+          >
+            <SlidersHorizontal className="w-4 h-4" />
+          </button>
+          {showFilterMenu && (
+            <div className="absolute right-0 top-12 z-10 w-44 bg-white border border-gray-200 rounded-xl shadow-lg py-1.5">
+              {FILTER_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => { setStatusFilter(opt.value); setShowFilterMenu(false); }}
+                  className={`w-full text-left px-3 py-2 text-xs font-medium transition-colors ${
+                    statusFilter === opt.value ? 'text-violet-700 bg-violet-50' : 'text-gray-600 hover:bg-gray-50'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <button
+          type="button"
+          onClick={() => navigate(`/faculty/attendance/${batch}/${track}/roster`)}
+          aria-label="View batch roster"
+          className="w-10 h-10 rounded-xl border border-gray-200 text-gray-400 hover:text-gray-600 flex items-center justify-center shrink-0 transition-colors"
+        >
+          <Users className="w-4 h-4" />
+        </button>
+
         <button
           type="button"
           onClick={undoLast}
@@ -242,11 +417,23 @@ export function SwipeAttendanceDeck({ candidates, batch, track, date, onSuccess,
 
       {/* Roster */}
       <div className="space-y-2">
-        {filtered.map((c) => (
-          <SwipeRow key={c._id} candidate={c} status={statuses[c._id]} onMark={mark} />
+        {filtered.map((c, i) => (
+          <SwipeRow
+            key={c._id}
+            index={i + 1}
+            candidate={c}
+            status={statuses[c._id]}
+            expanded={expandedId === c._id}
+            tapEnabled={tapToEdit}
+            onMark={mark}
+            onUnmark={unmark}
+            onToggleExpand={toggleExpand}
+          />
         ))}
         {filtered.length === 0 && (
-          <p className="text-center text-sm text-gray-400 py-6">No candidates match "{search}".</p>
+          <p className="text-center text-sm text-gray-400 py-6">
+            {search ? `No candidates match "${search}".` : 'No candidates match this filter.'}
+          </p>
         )}
       </div>
 

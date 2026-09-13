@@ -74,6 +74,9 @@ export interface Candidate {
   status: 'active' | 'inactive' | 'placed';
   /** Admin/TPO-issued login address — separate from `email`, mirrors Faculty.loginEmail. */
   loginEmail?: string;
+  /** Faculty-attached note, editable from the batch roster's edit view only —
+   *  never shown on the attendance-marking screen itself. */
+  facultyNote?: string;
   createdAt: string;
   updatedAt: string;
 }

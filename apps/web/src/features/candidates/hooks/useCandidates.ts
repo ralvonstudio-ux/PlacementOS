@@ -34,6 +34,19 @@ export const useDeleteCandidate = () => {
   });
 };
 
+export const useUpdateFacultyNote = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, facultyNote }: { id: string; facultyNote: string }) => candidatesApi.updateFacultyNote(id, facultyNote),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: candidateKeys.all });
+      // Also refreshes BatchAttendancePage/BatchRosterPage's roster query, which is
+      // keyed separately under 'attendance' since it fetches via listByBatch.
+      qc.invalidateQueries({ queryKey: ['attendance', 'batch-candidates'] });
+    },
+  });
+};
+
 export const useCreateCandidateLogin = () => {
   const qc = useQueryClient();
   return useMutation({
