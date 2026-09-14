@@ -81,7 +81,7 @@ export const ActionCard = ({
         // Compact icon tile on phones (icon + label only); full description
         // card from `sm` up — big cards ate too much vertical space stacked
         // one-per-row on narrow screens.
-        'group relative flex flex-col items-center text-center gap-1.5 bg-white rounded-2xl p-3 w-full',
+        'group relative flex flex-col items-center text-center gap-1 bg-white rounded-2xl p-2 w-full',
         'sm:items-start sm:text-left sm:gap-0 sm:p-6',
         'border border-gray-100 shadow-sm',
         'transition-all duration-200',
@@ -104,11 +104,11 @@ export const ActionCard = ({
       {/* Icon */}
       <div
         className={cn(
-          'w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0',
+          'w-8 h-8 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0',
           colors.iconBg
         )}
       >
-        <Icon className={cn('w-5 h-5 sm:w-6 sm:h-6', colors.iconColor)} strokeWidth={1.75} />
+        <Icon className={cn('w-4 h-4 sm:w-6 sm:h-6', colors.iconColor)} strokeWidth={1.75} />
       </div>
 
       {/* Content */}

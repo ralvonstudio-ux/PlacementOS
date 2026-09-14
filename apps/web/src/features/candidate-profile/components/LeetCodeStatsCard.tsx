@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Award, RefreshCw, Loader2, Flame, CalendarDays } from 'lucide-react';
+import { Award, RefreshCw, Loader2, Flame, CalendarDays, Pencil } from 'lucide-react';
 import type { LeetCodeStats } from '@placementos/types';
 import { cn } from '@/lib/utils';
 
@@ -14,6 +14,9 @@ interface LeetCodeStatsCardProps {
   /** Compact mode shrinks the ring and drops badges/heatmap/footer on phones
    *  (they come back at `sm`) — for tighter spaces like the dashboard. */
   compact?: boolean;
+  /** When set, shows a small pencil next to the username to change it — keeps
+   *  that affordance inline instead of a separate line under the card. */
+  onEditUsername?: () => void;
 }
 
 const DAY_SECONDS = 86_400;
@@ -86,7 +89,7 @@ function DifficultyRow({ label, solved, total, accent }: { label: string; solved
   );
 }
 
-export function LeetCodeStatsCard({ username, stats, isLoading, isError, errorMessage, isFetching, onRefresh, compact }: LeetCodeStatsCardProps) {
+export function LeetCodeStatsCard({ username, stats, isLoading, isError, errorMessage, isFetching, onRefresh, compact, onEditUsername }: LeetCodeStatsCardProps) {
   const weeks = useMemo(() => (stats ? buildWeeks(stats.submissionCalendar) : []), [stats]);
 
   return (
@@ -99,6 +102,11 @@ export function LeetCodeStatsCard({ username, stats, isLoading, isError, errorMe
               <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
             </span>
             <span className="text-base font-semibold text-gray-900">{username}</span>
+            {onEditUsername && (
+              <button onClick={onEditUsername} aria-label="Change LeetCode username" className="text-gray-300 hover:text-violet-600 transition-colors">
+                <Pencil className="w-3 h-3" />
+              </button>
+            )}
           </div>
           {stats?.ranking && <p className="text-xs text-gray-400 mt-0.5">Rank #{stats.ranking.toLocaleString()}</p>}
         </div>

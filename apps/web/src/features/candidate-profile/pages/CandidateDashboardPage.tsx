@@ -35,27 +35,20 @@ export function CandidateDashboardPage() {
   }
 
   return (
-    <PageContainer className="pt-3 pb-3 sm:pt-6 sm:pb-8">
-      <SectionTitle className="mb-2 sm:mb-4">LeetCode Progress</SectionTitle>
+    <PageContainer className="pt-2 pb-2 sm:pt-6 sm:pb-8">
+      <SectionTitle className="mb-1.5 sm:mb-4">LeetCode Progress</SectionTitle>
       {hasLeetCode && !editingLeetCode ? (
-        <>
-          <LeetCodeStatsCard
-            username={profile.leetcodeUsername ?? ''}
-            stats={leetStats}
-            isLoading={leetLoading}
-            isError={leetError}
-            errorMessage={extractErrorMessage(leetFetchError)}
-            isFetching={leetFetching}
-            onRefresh={() => refetchLeet()}
-            compact
-          />
-          <button
-            onClick={() => setEditingLeetCode(true)}
-            className="mt-2 text-xs font-medium text-violet-600 hover:text-violet-700"
-          >
-            Change LeetCode username
-          </button>
-        </>
+        <LeetCodeStatsCard
+          username={profile.leetcodeUsername ?? ''}
+          stats={leetStats}
+          isLoading={leetLoading}
+          isError={leetError}
+          errorMessage={extractErrorMessage(leetFetchError)}
+          isFetching={leetFetching}
+          onRefresh={() => refetchLeet()}
+          onEditUsername={() => setEditingLeetCode(true)}
+          compact
+        />
       ) : (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-6">
           <p className="text-sm text-gray-500 mb-3">Link your LeetCode account to track your solved-question stats right here.</p>
@@ -83,15 +76,15 @@ export function CandidateDashboardPage() {
         </div>
       )}
 
-      <SectionTitle className="mt-4 sm:mt-10 mb-2 sm:mb-4">Get Started</SectionTitle>
-      <div className="grid grid-cols-3 gap-2 sm:gap-4 sm:grid-cols-2 xl:grid-cols-3 mb-2">
+      <SectionTitle className="mt-3 sm:mt-10 mb-1.5 sm:mb-4">Get Started</SectionTitle>
+      <div className="grid grid-cols-3 gap-1.5 sm:gap-4 sm:grid-cols-2 xl:grid-cols-3 mb-1.5">
         <ActionCard icon={FileText} title="Resume" description="Upload your latest resume" accent="blue" onClick={() => navigate('/candidate/resume')} />
         <ActionCard icon={ShieldCheck} title="Tests" description="Proctored assessments" accent="rose" badge={pendingTests > 0 ? `${pendingTests} pending` : undefined} onClick={() => navigate('/candidate/tests')} />
         <ActionCard icon={BookMarked} title="Practice Sheets" description="Curated sheets for your batch" accent="emerald" onClick={() => navigate('/candidate/practice-sheets')} />
       </div>
 
-      <SectionTitle className="mt-4 sm:mt-10 mb-2 sm:mb-4">Interview Preparation</SectionTitle>
-      <div className="grid grid-cols-4 gap-2 sm:gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <SectionTitle className="mt-3 sm:mt-10 mb-1.5 sm:mb-4">Interview Preparation</SectionTitle>
+      <div className="grid grid-cols-3 gap-1.5 sm:gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <ActionCard icon={MessageSquare} title="PI Questions" description="Personal interview practice" accent="purple" onClick={() => navigate('/candidate/practice/pi')} />
         <ActionCard icon={Users2} title="GD Questions" description="Group discussion topics" accent="amber" onClick={() => navigate('/candidate/practice/gd')} />
         <ActionCard icon={Calculator} title="Aptitude & Reasoning" description="Quant and logical reasoning" accent="green" onClick={() => navigate('/candidate/practice/aptitude')} />
