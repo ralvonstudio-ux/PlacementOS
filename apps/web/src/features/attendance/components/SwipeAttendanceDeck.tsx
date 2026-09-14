@@ -1,12 +1,13 @@
-import { useState, useMemo, useRef } from 'react';
-import { motion, useMotionValue, useTransform, type PanInfo } from 'framer-motion';
+import { useState, useMemo, useRef, useEffect } from 'react';
+import { motion, AnimatePresence, useMotionValue, useTransform, type PanInfo } from 'framer-motion';
 import {
-  Check, X, Clock, CalendarOff, Search, CheckCircle2, XCircle, Undo2,
-  SlidersHorizontal, Users, RotateCcw,
+  Check, X, Clock, CalendarOff, Search, Undo2,
+  SlidersHorizontal, Users, RotateCcw, Save,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import type { AttendanceStatus, Candidate } from '@placementos/types';
 import { useBulkMarkAttendance } from '../hooks/useAttendance';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 interface Props {
   candidates: Candidate[];
@@ -23,8 +24,12 @@ function initialsOf(name: string): string {
   return name.split(' ').map((n) => n[0]).filter(Boolean).slice(0, 2).join('').toUpperCase();
 }
 
+function draftKey(batch: string, track: string, date: string): string {
+  return `po_attendance_draft_${batch}_${track}_${date}`;
+}
+
 const STATUS_STYLE: Record<AttendanceStatus, { label: string; bg: string; text: string; ring: string }> = {
-  present: { label: 'Present', bg: 'bg-green-50', text: 'text-green-700', ring: 'ring-green-200' },
+  present: { label: 'Present', bg: 'bg-emerald-50', text: 'text-emerald-700', ring: 'ring-emerald-200' },
   absent: { label: 'Absent', bg: 'bg-red-50', text: 'text-red-700', ring: 'ring-red-200' },
   late: { label: 'Late', bg: 'bg-yellow-50', text: 'text-yellow-700', ring: 'ring-yellow-200' },
   excused: { label: 'Excused', bg: 'bg-blue-50', text: 'text-blue-700', ring: 'ring-blue-200' },
@@ -38,8 +43,7 @@ type StatusFilter = 'all' | 'present' | 'absent' | 'unmarked';
  *  the same as any other list — swiping is the fast path, not the only path.
  *
  *  Tapping the name/avatar area (rather than dragging) expands an inline Present /
- *  Absent / Unmark strip — a slower, explicit alternative to swiping, gated by the
- *  toolbar's "Tap to edit" toggle so a stray tap on a long list can't misfire. */
+ *  Absent / Unmark strip — a slower, explicit alternative to swiping. */
 function SwipeRow({
   index,
   candidate,
@@ -94,11 +98,11 @@ function SwipeRow({
     <div className="relative overflow-hidden rounded-xl">
       {/* Swipe-direction reveal — each panel scales from 0 to the row's full width,
           anchored to the edge the card is sliding away from, so the row goes fully
-          solid red/green rather than a partial strip. */}
+          solid emerald/red rather than a partial strip. */}
       <div className="absolute inset-0 rounded-xl overflow-hidden pointer-events-none">
         <motion.div
           style={{ scaleX: presentScale, opacity: presentLabelOpacity }}
-          className="absolute inset-0 bg-green-500 flex items-center pl-4 origin-left"
+          className="absolute inset-0 bg-emerald-500 flex items-center pl-4 origin-left"
         >
           <span className="flex items-center gap-1.5 text-white font-bold text-xs whitespace-nowrap">
             <Check className="w-4 h-4" /> PRESENT
@@ -139,11 +143,30 @@ function SwipeRow({
           <p className="text-[11px] text-gray-400 truncate">{candidate.rollNumber}</p>
         </div>
 
-        {marked && style ? (
-          <span className={`text-[11px] font-semibold px-2 py-1 rounded-full whitespace-nowrap shrink-0 ${style.bg} ${style.text}`}>{style.label}</span>
-        ) : (
-          <span className="text-[10px] text-gray-300 font-medium tracking-wide shrink-0 whitespace-nowrap">SWIPE</span>
-        )}
+        <AnimatePresence mode="wait" initial={false}>
+          {marked && style ? (
+            <motion.span
+              key={status}
+              initial={{ scale: 0.4, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.4, opacity: 0 }}
+              transition={{ type: 'spring', stiffness: 500, damping: 20 }}
+              className={`text-[11px] font-bold px-2 py-1 rounded-full whitespace-nowrap shrink-0 ${style.bg} ${style.text}`}
+            >
+              {style.label}
+            </motion.span>
+          ) : (
+            <motion.span
+              key="unmarked"
+              initial={{ scale: 0.4, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.4, opacity: 0 }}
+              className="text-[10px] text-gray-300 font-medium tracking-wide shrink-0 whitespace-nowrap"
+            >
+              SWIPE
+            </motion.span>
+          )}
+        </AnimatePresence>
       </motion.div>
 
       {/* Tap-to-expand quick actions — everything a swipe can't reach in one place:
@@ -156,7 +179,7 @@ function SwipeRow({
               type="button"
               onClick={(e) => { e.stopPropagation(); onMark(candidate._id, 'present'); }}
               className={`flex-1 h-8 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-colors ${
-                status === 'present' ? 'bg-green-600 text-white' : 'bg-white border border-green-200 text-green-700 hover:bg-green-50'
+                status === 'present' ? 'bg-emerald-600 text-white' : 'bg-white border border-emerald-200 text-emerald-700 hover:bg-emerald-50'
               }`}
             >
               <Check className="w-3.5 h-3.5" /> Present
@@ -205,6 +228,38 @@ function SwipeRow({
   );
 }
 
+/** Stat card with a soft glow behind its icon and a bouncy pop whenever the count changes. */
+function StatCard({ label, count, tone }: { label: string; count: number; tone: 'emerald' | 'red' }) {
+  const toneCls = tone === 'emerald'
+    ? { glow: 'bg-emerald-400', iconBg: 'from-emerald-400 to-emerald-600', shadow: 'shadow-emerald-500/40', border: 'border-emerald-100', bg: 'bg-emerald-50/60', text: 'text-emerald-700', sub: 'text-emerald-600' }
+    : { glow: 'bg-red-400', iconBg: 'from-red-400 to-red-600', shadow: 'shadow-red-500/40', border: 'border-red-100', bg: 'bg-red-50/60', text: 'text-red-700', sub: 'text-red-600' };
+
+  return (
+    <div className={`flex items-center gap-3 rounded-2xl border ${toneCls.border} ${toneCls.bg} px-4 py-3`}>
+      <div className="relative w-10 h-10 shrink-0">
+        <span className={`absolute inset-0 rounded-full ${toneCls.glow} opacity-40 blur-md animate-pulse`} />
+        <div className={`relative w-10 h-10 rounded-full bg-gradient-to-br ${toneCls.iconBg} text-white flex items-center justify-center shadow-lg ${toneCls.shadow}`}>
+          {tone === 'emerald' ? <Check className="w-5 h-5" strokeWidth={3} /> : <X className="w-5 h-5" strokeWidth={3} />}
+        </div>
+      </div>
+      <div>
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.p
+            key={count}
+            initial={{ scale: 0.5, opacity: 0, y: -4 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            transition={{ type: 'spring', stiffness: 500, damping: 22 }}
+            className={`text-xl font-bold ${toneCls.text} leading-none`}
+          >
+            {count}
+          </motion.p>
+        </AnimatePresence>
+        <p className={`text-xs ${toneCls.sub} mt-0.5`}>{label}</p>
+      </div>
+    </div>
+  );
+}
+
 export function SwipeAttendanceDeck({ candidates, batch, track, date, onSuccess, onCancel }: Props) {
   const navigate = useNavigate();
   const { mutateAsync: bulkMark, isPending } = useBulkMarkAttendance();
@@ -214,7 +269,42 @@ export function SwipeAttendanceDeck({ candidates, batch, track, date, onSuccess,
   const [showFilterMenu, setShowFilterMenu] = useState(false);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [restoredDraft, setRestoredDraft] = useState(false);
   const historyRef = useRef<{ id: string; prev: AttendanceStatus | undefined }[]>([]);
+  const key = draftKey(batch, track, date);
+  const hydratedRef = useRef(false);
+
+  // Restore any unsaved marks left behind by a network drop, an accidental
+  // reload, or the tab getting killed mid-session — nothing gets lost.
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(key);
+      if (raw) {
+        const saved = JSON.parse(raw) as Record<string, AttendanceStatus>;
+        if (saved && Object.keys(saved).length > 0) {
+          setStatuses(saved);
+          setRestoredDraft(true);
+        }
+      }
+    } catch {
+      // Corrupt/inaccessible storage — just start fresh.
+    }
+    hydratedRef.current = true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+
+  // Autosave on every change (skip the very first render so we don't
+  // immediately re-write the draft we just restored).
+  useEffect(() => {
+    if (!hydratedRef.current) return;
+    try {
+      if (Object.keys(statuses).length === 0) localStorage.removeItem(key);
+      else localStorage.setItem(key, JSON.stringify(statuses));
+    } catch {
+      // Storage full/unavailable — silently skip; nothing user-facing to fix.
+    }
+  }, [statuses, key]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -233,6 +323,7 @@ export function SwipeAttendanceDeck({ candidates, batch, track, date, onSuccess,
 
   const unmarkedCount = candidates.length - Object.keys(statuses).length;
   const absentNames = candidates.filter((c) => statuses[c._id] === 'absent').map((c) => c.fullName);
+  const allPresent = candidates.length > 0 && candidates.every((c) => statuses[c._id] === 'present');
 
   function mark(id: string, status: AttendanceStatus) {
     historyRef.current.push({ id, prev: statuses[id] });
@@ -266,17 +357,24 @@ export function SwipeAttendanceDeck({ candidates, batch, track, date, onSuccess,
     historyRef.current = [];
   }
 
+  function unmarkAll() {
+    setStatuses({});
+    historyRef.current = [];
+  }
+
   function toggleExpand(id: string) {
     setExpandedId((prev) => (prev === id ? null : id));
   }
 
-  async function handleSubmit() {
+  async function confirmSubmit() {
     await bulkMark({
       batch,
       track,
       date,
       records: candidates.map((c) => ({ candidateId: c._id, status: statuses[c._id] ?? 'present' })),
     });
+    try { localStorage.removeItem(key); } catch { /* best effort */ }
+    setConfirmOpen(false);
     onSuccess?.();
   }
 
@@ -292,167 +390,198 @@ export function SwipeAttendanceDeck({ candidates, batch, track, date, onSuccess,
   ];
 
   return (
-    <div className="flex flex-col">
-      {/* Live counts */}
-      <div className="grid grid-cols-2 gap-3 mb-4">
-        <div className="flex items-center gap-3 rounded-2xl border border-green-100 bg-green-50/60 px-4 py-3">
-          <div className="w-9 h-9 rounded-full bg-green-500 text-white flex items-center justify-center shrink-0">
-            <CheckCircle2 className="w-5 h-5" />
-          </div>
-          <div>
-            <p className="text-xl font-bold text-green-700 leading-none">{counts.present}</p>
-            <p className="text-xs text-green-600 mt-0.5">Present</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-3 rounded-2xl border border-red-100 bg-red-50/60 px-4 py-3">
-          <div className="w-9 h-9 rounded-full bg-red-500 text-white flex items-center justify-center shrink-0">
-            <XCircle className="w-5 h-5" />
-          </div>
-          <div>
-            <p className="text-xl font-bold text-red-700 leading-none">{counts.absent}</p>
-            <p className="text-xs text-red-600 mt-0.5">Absent</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Toolbar */}
-      <div className="flex items-center gap-1.5 sm:gap-2 mb-4">
-        <button
-          type="button"
-          onClick={markAllPresent}
-          className="flex-1 h-9 sm:h-10 rounded-xl bg-gradient-to-r from-violet-600 to-pink-500 text-white text-xs sm:text-sm font-semibold shadow-sm hover:opacity-90 transition-opacity px-2"
-        >
-          All Present
-        </button>
-
-        <button
-          type="button"
-          onClick={() => { setShowSearch((v) => !v); setShowFilterMenu(false); }}
-          aria-label="Search"
-          className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl border flex items-center justify-center shrink-0 transition-colors ${
-            showSearch ? 'bg-violet-50 border-violet-200 text-violet-600' : 'border-gray-200 text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          <Search className="w-4 h-4" />
-        </button>
-
-        <div className="relative shrink-0">
+    <div className="flex flex-col h-full min-h-0">
+      {/* Fixed top section — stays put while the roster below scrolls. */}
+      <div className="shrink-0">
+        {restoredDraft && (
           <button
             type="button"
-            onClick={() => { setShowFilterMenu((v) => !v); setShowSearch(false); }}
-            aria-label="Filter"
-            className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl border flex items-center justify-center transition-colors ${
-              showFilterMenu || statusFilter !== 'all' ? 'bg-violet-50 border-violet-200 text-violet-600' : 'border-gray-200 text-gray-500 hover:text-gray-700'
+            onClick={() => setRestoredDraft(false)}
+            className="w-full mb-3 flex items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-left"
+          >
+            <span className="text-xs font-medium text-amber-700">Restored unsaved attendance from your last session.</span>
+            <span className="text-[11px] font-semibold text-amber-500 shrink-0">Dismiss</span>
+          </button>
+        )}
+
+        {/* Live counts */}
+        <div className="grid grid-cols-2 gap-3 mb-4">
+          <StatCard label="Present" count={counts.present} tone="emerald" />
+          <StatCard label="Absent" count={counts.absent} tone="red" />
+        </div>
+
+        {/* Toolbar */}
+        <div className="flex items-center gap-1.5 sm:gap-2 mb-3">
+          <button
+            type="button"
+            onClick={unmarkAll}
+            disabled={Object.keys(statuses).length === 0}
+            className="flex-1 h-9 sm:h-10 rounded-xl bg-violet-50 text-violet-700 text-xs sm:text-sm font-bold hover:bg-violet-100 transition-colors px-2 disabled:opacity-40 disabled:hover:bg-violet-50"
+          >
+            Unmark All
+          </button>
+
+          <button
+            type="button"
+            role="switch"
+            aria-checked={allPresent}
+            aria-label="Mark everyone present"
+            onClick={() => (allPresent ? unmarkAll() : markAllPresent())}
+            className={`relative w-11 h-6 sm:h-7 sm:w-12 rounded-full shrink-0 transition-colors duration-200 ${allPresent ? 'bg-emerald-500' : 'bg-gray-200'}`}
+          >
+            <motion.span
+              layout
+              transition={{ type: 'spring', stiffness: 600, damping: 32 }}
+              className="absolute top-0.5 left-0.5 w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-white shadow"
+              style={{ x: allPresent ? 20 : 0 }}
+            />
+          </button>
+
+          <button
+            type="button"
+            onClick={() => { setShowSearch((v) => !v); setShowFilterMenu(false); }}
+            aria-label="Search"
+            className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl border flex items-center justify-center shrink-0 transition-colors ${
+              showSearch ? 'bg-violet-50 border-violet-200 text-violet-600' : 'border-gray-200 text-gray-500 hover:text-gray-700'
             }`}
           >
-            <SlidersHorizontal className="w-4 h-4" />
+            <Search className="w-4 h-4" />
           </button>
-          {showFilterMenu && (
-            <div className="absolute right-0 top-11 z-10 w-44 bg-white border border-gray-200 rounded-xl shadow-lg py-1.5">
-              {FILTER_OPTIONS.map((opt) => (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() => { setStatusFilter(opt.value); setShowFilterMenu(false); }}
-                  className={`w-full text-left px-3 py-2 text-xs font-medium transition-colors ${
-                    statusFilter === opt.value ? 'text-violet-700 bg-violet-50' : 'text-gray-600 hover:bg-gray-50'
-                  }`}
-                >
-                  {opt.label}
-                </button>
+
+          <div className="relative shrink-0">
+            <button
+              type="button"
+              onClick={() => { setShowFilterMenu((v) => !v); setShowSearch(false); }}
+              aria-label="Filter"
+              className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl border flex items-center justify-center transition-colors ${
+                showFilterMenu || statusFilter !== 'all' ? 'bg-violet-50 border-violet-200 text-violet-600' : 'border-gray-200 text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <SlidersHorizontal className="w-4 h-4" />
+            </button>
+            {showFilterMenu && (
+              <div className="absolute right-0 top-11 z-10 w-44 bg-white border border-gray-200 rounded-xl shadow-lg py-1.5">
+                {FILTER_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => { setStatusFilter(opt.value); setShowFilterMenu(false); }}
+                    className={`w-full text-left px-3 py-2 text-xs font-medium transition-colors ${
+                      statusFilter === opt.value ? 'text-violet-700 bg-violet-50' : 'text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => navigate(`/faculty/attendance/${batch}/${track}/roster`)}
+            aria-label="View batch roster"
+            className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl border border-gray-200 text-gray-500 hover:text-gray-700 flex items-center justify-center shrink-0 transition-colors"
+          >
+            <Users className="w-4 h-4" />
+          </button>
+
+          <button
+            type="button"
+            onClick={undoLast}
+            disabled={historyRef.current.length === 0}
+            aria-label="Undo last"
+            className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-amber-50 border border-amber-200 text-amber-600 hover:bg-amber-100 flex items-center justify-center shrink-0 disabled:opacity-30 disabled:hover:bg-amber-50 transition-colors"
+          >
+            <Undo2 className="w-4 h-4" />
+          </button>
+        </div>
+
+        {showSearch && (
+          <input
+            autoFocus
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by name or roll number…"
+            className="w-full h-10 px-3 mb-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-500"
+          />
+        )}
+      </div>
+
+      {/* Only this middle section scrolls — the page around it stays put. */}
+      <div className="flex-1 min-h-0 overflow-y-auto -mx-1 px-1">
+        <div className="space-y-2">
+          {filtered.map((c, i) => (
+            <SwipeRow
+              key={c._id}
+              index={i + 1}
+              candidate={c}
+              status={statuses[c._id]}
+              expanded={expandedId === c._id}
+              onMark={mark}
+              onUnmark={unmark}
+              onToggleExpand={toggleExpand}
+            />
+          ))}
+          {filtered.length === 0 && (
+            <p className="text-center text-sm text-gray-400 py-6">
+              {search ? `No candidates match "${search}".` : 'No candidates match this filter.'}
+            </p>
+          )}
+        </div>
+
+        {/* Absent summary */}
+        <div className="mt-5 mb-2 rounded-2xl border border-gray-100 bg-gray-50/60 p-4">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Absent Students Summary</p>
+          {absentNames.length === 0 ? (
+            <p className="text-sm text-gray-400">No students marked absent yet.</p>
+          ) : (
+            <div className="flex flex-wrap gap-1.5">
+              {absentNames.map((n) => (
+                <span key={n} className="text-xs font-medium px-2.5 py-1 rounded-full bg-red-100 text-red-700">{n}</span>
               ))}
             </div>
           )}
         </div>
-
-        <button
-          type="button"
-          onClick={() => navigate(`/faculty/attendance/${batch}/${track}/roster`)}
-          aria-label="View batch roster"
-          className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl border border-gray-200 text-gray-500 hover:text-gray-700 flex items-center justify-center shrink-0 transition-colors"
-        >
-          <Users className="w-4 h-4" />
-        </button>
-
-        <button
-          type="button"
-          onClick={undoLast}
-          disabled={historyRef.current.length === 0}
-          aria-label="Undo last"
-          className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl border border-gray-200 text-gray-500 hover:text-gray-700 flex items-center justify-center shrink-0 disabled:opacity-30 disabled:hover:text-gray-500 transition-colors"
-        >
-          <Undo2 className="w-4 h-4" />
-        </button>
       </div>
 
-      {showSearch && (
-        <input
-          autoFocus
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search by name or roll number…"
-          className="w-full h-10 px-3 mb-4 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-500"
-        />
-      )}
-
-      {/* Roster */}
-      <div className="space-y-2">
-        {filtered.map((c, i) => (
-          <SwipeRow
-            key={c._id}
-            index={i + 1}
-            candidate={c}
-            status={statuses[c._id]}
-            expanded={expandedId === c._id}
-            onMark={mark}
-            onUnmark={unmark}
-            onToggleExpand={toggleExpand}
-          />
-        ))}
-        {filtered.length === 0 && (
-          <p className="text-center text-sm text-gray-400 py-6">
-            {search ? `No candidates match "${search}".` : 'No candidates match this filter.'}
-          </p>
-        )}
-      </div>
-
-      {/* Absent summary */}
-      <div className="mt-5 rounded-2xl border border-gray-100 bg-gray-50/60 p-4">
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Absent Students Summary</p>
-        {absentNames.length === 0 ? (
-          <p className="text-sm text-gray-400">No students marked absent yet.</p>
-        ) : (
-          <div className="flex flex-wrap gap-1.5">
-            {absentNames.map((n) => (
-              <span key={n} className="text-xs font-medium px-2.5 py-1 rounded-full bg-red-100 text-red-700">{n}</span>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Sticky save bar */}
-      <div className="sticky bottom-0 -mx-3 sm:-mx-5 mt-5 bg-gradient-to-t from-white via-white to-transparent pt-4 px-3 sm:px-5 pb-1">
+      {/* Save bar — always pinned at the bottom of the panel, never scrolls away. */}
+      <div className="shrink-0 pt-3">
         <div className="flex gap-3">
           {onCancel && (
             <button
               type="button"
               onClick={onCancel}
-              className="h-11 px-4 rounded-xl border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+              className="h-12 px-4 rounded-xl border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
             >
               Cancel
             </button>
           )}
           <button
             type="button"
-            onClick={handleSubmit}
+            onClick={() => setConfirmOpen(true)}
             disabled={isPending}
-            className="flex-1 h-11 rounded-xl bg-violet-600 hover:bg-violet-700 text-sm font-semibold text-white transition-colors disabled:opacity-50"
+            className="flex-1 h-12 rounded-xl bg-gradient-to-r from-violet-600 to-pink-500 hover:opacity-90 text-sm font-bold text-white transition-opacity disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-violet-500/20"
           >
-            {isPending ? 'Saving…' : unmarkedCount > 0 ? `Save (${unmarkedCount} unmarked)` : 'Save Attendance'}
+            <Save className="w-4 h-4" />
+            {unmarkedCount > 0 ? `Save (${unmarkedCount} unmarked)` : 'Save Attendance'}
           </button>
         </div>
       </div>
+
+      {confirmOpen && (
+        <ConfirmDialog
+          title="Submit Attendance?"
+          description="Would you like to submit the attendance for this class?"
+          confirmLabel="Yes, Submit"
+          cancelLabel="Cancel"
+          variant="warning"
+          isLoading={isPending}
+          onConfirm={confirmSubmit}
+          onCancel={() => setConfirmOpen(false)}
+        />
+      )}
     </div>
   );
 }
