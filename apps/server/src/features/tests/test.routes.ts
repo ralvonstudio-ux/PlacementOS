@@ -17,7 +17,10 @@ router.post('/attempts/:attemptId/submit', authorize('candidate'), testControlle
 // Faculty / TPO authoring + review.
 router.get('/', authorize('admin', 'tpo', 'faculty'), testController.list);
 router.post('/', authorize('admin', 'tpo', 'faculty'), testController.create);
+router.post('/generate-draft', authorize('admin', 'tpo', 'faculty'), testController.generateDraft);
 router.patch('/:id', authorize('admin', 'tpo', 'faculty'), testController.update);
+router.patch('/:id/submit-for-approval', authorize('admin', 'tpo', 'faculty'), testController.submitForApproval);
+router.patch('/:id/review', authorize('admin', 'tpo'), testController.review);
 router.patch('/:id/publish', authorize('admin', 'tpo', 'faculty'), testController.publish);
 router.patch('/:id/close', authorize('admin', 'tpo', 'faculty'), testController.close);
 router.delete('/:id', authorize('admin', 'tpo', 'faculty'), testController.remove);

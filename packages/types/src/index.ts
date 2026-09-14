@@ -900,6 +900,7 @@ export interface InstituteSettings {
 // ── Worksheet Generator (rich domain) ─────────────────────────────────────────
 
 export type GeneratedWorksheetType = 'practice' | 'homework' | 'revision' | 'hots' | 'olympiad' | 'remedial';
+export type WorksheetSourceType = 'module_bank' | 'content_upload';
 
 export interface BankWorksheetQuestion {
   questionId?: string;
@@ -926,6 +927,9 @@ export interface GeneratedWorksheet {
   worksheetType: GeneratedWorksheetType;
   title: string;
   questions: BankWorksheetQuestion[];
+  sourceType?: WorksheetSourceType;
+  sourceContent?: string;
+  aiReview?: string;
   createdBy: string;
   resolvedImages?: Record<string, ResolvedQuestionImage>;
   createdAt: string;
@@ -942,10 +946,25 @@ export interface GenerateWorksheetPayload {
   includeImages?: boolean;
 }
 
+export interface GenerateWorksheetFromContentPayload {
+  batch: string;
+  track: string;
+  moduleName: string;
+  contentText: string;
+  worksheetType: GeneratedWorksheetType;
+  questionCount: number;
+  languageComplexity?: LanguageComplexity;
+}
+
 export interface WorksheetDraft {
   config: GenerateWorksheetPayload;
   questions: BankWorksheetQuestion[];
   resolvedImages?: Record<string, ResolvedQuestionImage>;
+}
+
+export interface WorksheetFromContentDraft {
+  questions: BankWorksheetQuestion[];
+  aiReview: string;
 }
 
 export interface SaveWorksheetPayload {
@@ -956,6 +975,10 @@ export interface SaveWorksheetPayload {
   title: string;
   questions: BankWorksheetQuestion[];
   addNewToBank: boolean;
+  sourceType?: WorksheetSourceType;
+  moduleName?: string;
+  sourceContent?: string;
+  aiReview?: string;
 }
 
 export interface WorksheetListOptions {
@@ -1484,7 +1507,7 @@ export interface ImportSession {
 
 // ── Proctored Tests ────────────────────────────────────────────────────────
 
-export type TestStatus = 'draft' | 'published' | 'closed';
+export type TestStatus = 'draft' | 'pending_approval' | 'approved' | 'rejected' | 'published' | 'closed';
 export type TestQuestionType = 'mcq' | 'short_answer';
 
 /** A question as frozen into a Test at creation time — deliberately a snapshot,
@@ -1513,6 +1536,14 @@ export interface Test {
   /** Number of proctoring violations tolerated before an attempt auto-submits. */
   violationLimit: number;
   status: TestStatus;
+  /** Set only when the test was AI-drafted from uploaded/pasted content. */
+  contentName?: string;
+  topic?: string;
+  aiGenerated?: boolean;
+  aiReview?: string;
+  reviewNote?: string;
+  reviewedBy?: string;
+  reviewedAt?: string;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
@@ -1525,6 +1556,24 @@ export interface CreateTestPayload {
   questions: TestQuestionSnapshot[];
   durationMinutes: number;
   violationLimit: number;
+}
+
+export interface GenerateTestDraftPayload {
+  title: string;
+  batch: string;
+  track?: string;
+  contentName: string;
+  topic: string;
+  sourceContent: string;
+  mcqCount: number;
+  shortAnswerCount: number;
+  durationMinutes: number;
+  violationLimit: number;
+}
+
+export interface ReviewTestPayload {
+  decision: 'approved' | 'rejected';
+  reviewNote?: string;
 }
 
 /** What a candidate sees in their test list / when starting one. */
@@ -1610,4 +1659,68 @@ export interface TestAttemptReview {
   attempt: TestAttempt;
   candidateName: string;
   test: Test;
+}
+
+// ── Academic Plan (syllabus-driven, distinct from module-based Training Plan) ────
+
+export type AcademicPlanSessionStatus = 'planned' | 'completed' | 'skipped';
+
+export interface AcademicPlanSession {
+  lectureNumber: number;
+  week: number;
+  date: string;
+  title: string;
+  description?: string;
+  status: AcademicPlanSessionStatus;
+  manuallyEdited?: boolean;
+}
+
+export interface AcademicPlan {
+  _id: string;
+  instituteId: string;
+  facultyId: string;
+  batch: string;
+  track: string;
+  title: string;
+  syllabusText: string;
+  totalLectures: number;
+  totalWeeks: number;
+  startDate: string;
+  sessions: AcademicPlanSession[];
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GenerateAcademicPlanPayload {
+  batch: string;
+  track: string;
+  title?: string;
+  syllabusText: string;
+  totalLectures: number;
+  totalWeeks: number;
+  startDate?: string;
+}
+
+export interface EditAcademicPlanSessionPayload {
+  lectureNumber: number;
+  title?: string;
+  description?: string;
+  week?: number;
+  date?: string;
+  status?: AcademicPlanSessionStatus;
+}
+
+export interface AddAcademicPlanSessionPayload {
+  title: string;
+  description?: string;
+  week: number;
+  date: string;
+}
+
+// ── Shared content extraction (paste-or-upload, used by Academic Plan / Worksheet / Test) ──
+
+export interface ExtractContentResult {
+  text: string;
+  fileName?: string;
 }

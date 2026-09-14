@@ -40,14 +40,36 @@ const worksheetQuestionSchema = z.object({
   imageRequirement: imageRequirementSchema.optional(),
 });
 
+export const generateWorksheetFromContentSchema = z.object({
+  batch: z.string({ required_error: 'batch is required' }).min(1).trim(),
+  track: z.string({ required_error: 'track is required' }).min(1).trim(),
+  moduleName: z.string({ required_error: 'moduleName is required' }).min(1).trim(),
+  contentText: z.string({ required_error: 'contentText is required' }).trim().min(20, 'Paste or upload more content — that looks too short to generate from.'),
+  worksheetType: z.enum(WORKSHEET_TYPES),
+  questionCount: z.number().int().min(1).max(50),
+  languageComplexity: z.enum(['auto', 'simple', 'standard', 'advanced']).default('auto'),
+});
+
 export const saveWorksheetSchema = z.object({
   batch: z.string({ required_error: 'batch is required' }).min(1).trim(),
   track: z.string({ required_error: 'track is required' }).min(1).trim(),
-  trainingModuleIds: z.array(z.string()).min(1, 'Select at least one training module'),
+  // Required for sourceType 'module_bank'; ignored for 'content_upload' (moduleName is used instead).
+  trainingModuleIds: z.array(z.string()).default([]),
   worksheetType: z.enum(WORKSHEET_TYPES),
   title: z.string({ required_error: 'title is required' }).min(1).trim(),
   questions: z.array(worksheetQuestionSchema).min(1, 'At least one question is required'),
   addNewToBank: z.boolean().default(true),
+  sourceType: z.enum(['module_bank', 'content_upload']).default('module_bank'),
+  // 'content_upload' only:
+  moduleName: z.string().trim().optional(),
+  sourceContent: z.string().optional(),
+  aiReview: z.string().optional(),
+}).refine((v) => v.sourceType === 'content_upload' || v.trainingModuleIds.length > 0, {
+  message: 'Select at least one training module',
+  path: ['trainingModuleIds'],
+}).refine((v) => v.sourceType !== 'content_upload' || !!v.moduleName?.trim(), {
+  message: 'moduleName is required for a content-based worksheet',
+  path: ['moduleName'],
 });
 
 export const listWorksheetsSchema = z.object({
@@ -69,6 +91,7 @@ export const updateWorksheetSchema = z.object({
 });
 
 export type GenerateWorksheetInput = z.infer<typeof generateWorksheetSchema>;
+export type GenerateWorksheetFromContentInput = z.infer<typeof generateWorksheetFromContentSchema>;
 export type SaveWorksheetInput = z.infer<typeof saveWorksheetSchema>;
 export type ListWorksheetsInput = z.infer<typeof listWorksheetsSchema>;
 export type UpdateWorksheetInput = z.infer<typeof updateWorksheetSchema>;

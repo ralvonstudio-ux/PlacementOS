@@ -15,6 +15,8 @@ export interface IWorksheetQuestion {
   imageRequirement?: IBankQuestionImageRequirement;
 }
 
+export type WorksheetSourceType = 'module_bank' | 'content_upload';
+
 export interface IWorksheet extends Document {
   instituteId: string;
   facultyId: string;
@@ -25,6 +27,13 @@ export interface IWorksheet extends Document {
   worksheetType: WorksheetType;
   title: string;
   questions: IWorksheetQuestion[];
+  /** 'module_bank' (default) draws from the question bank + AI-fills any shortfall;
+   *  'content_upload' is authored entirely from pasted/uploaded content. */
+  sourceType: WorksheetSourceType;
+  /** Raw pasted/extracted text this worksheet was generated from — content_upload only. */
+  sourceContent?: string;
+  /** AI's own short review of the draft (coverage, balance, suggestions) — content_upload only. */
+  aiReview?: string;
   createdBy: string;
   isDeleted: boolean;
   deletedAt?: Date;
@@ -67,6 +76,9 @@ const worksheetSchema = new Schema<IWorksheet>(
     worksheetType: { type: String, enum: WORKSHEET_TYPES, required: true },
     title: { type: String, required: true, trim: true },
     questions: { type: [worksheetQuestionSchema], default: [] },
+    sourceType: { type: String, enum: ['module_bank', 'content_upload'], default: 'module_bank' },
+    sourceContent: { type: String },
+    aiReview: { type: String },
     createdBy: { type: String, required: true },
     isDeleted: { type: Boolean, default: false },
     deletedAt: { type: Date },

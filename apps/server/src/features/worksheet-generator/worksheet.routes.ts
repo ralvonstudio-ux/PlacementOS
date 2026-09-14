@@ -9,6 +9,7 @@ router.use(authenticate);
 router.use(authorize('admin', 'tpo', 'faculty'));
 
 router.post('/generate', worksheetController.generate);
+router.post('/generate-from-content', worksheetController.generateFromContent);
 router.post('/', worksheetController.save);
 router.get('/', worksheetController.list);
 router.get('/:id', worksheetController.getById);
