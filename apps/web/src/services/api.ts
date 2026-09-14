@@ -37,6 +37,19 @@ apiClient.interceptors.request.use(
     if (sessionId) {
       config.headers['X-Session-Id'] = sessionId;
     }
+    // apiClient defaults to 'Content-Type: application/json' for every normal
+    // JSON call. But axios's own transformRequest checks that default BEFORE
+    // deciding how to encode the body: if it sees an explicit JSON content
+    // type AND a FormData payload, it silently serializes the FormData as
+    // JSON instead of sending it as multipart — a File has no enumerable
+    // properties, so every file upload on this instance was going out as
+    // '{"file":{}}' with no bytes attached, and the server correctly (if
+    // confusingly) rejected it as "no file". Clearing the header here lets
+    // axios fall through to its FormData branch and the browser set the
+    // correct multipart boundary itself.
+    if (config.data instanceof FormData) {
+      config.headers.delete('Content-Type');
+    }
     return config;
   },
   (error) => Promise.reject(error)
