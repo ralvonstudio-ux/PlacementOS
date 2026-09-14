@@ -35,6 +35,10 @@ export const startTestSchema = z.object({
   accessCode: z.string().trim().min(1, 'Enter the access code from your notification'),
 });
 
+export const sendAccessCodeSchema = z.object({
+  candidateIds: z.array(z.string().min(1)).min(1, 'Select at least one candidate'),
+});
+
 export const generateTestDraftSchema = z.object({
   title: z.string({ required_error: 'title is required' }).min(1).trim(),
   batch: z.string({ required_error: 'batch is required' }).min(1).trim(),
@@ -80,6 +84,7 @@ export const logViolationSchema = z.object({
 export type CreateTestInput = z.infer<typeof createTestSchema>;
 export type UpdateTestInput = z.infer<typeof updateTestSchema>;
 export type StartTestInput = z.infer<typeof startTestSchema>;
+export type SendAccessCodeInput = z.infer<typeof sendAccessCodeSchema>;
 export type GenerateTestDraftInput = z.infer<typeof generateTestDraftSchema>;
 export type ReviewTestInput = z.infer<typeof reviewTestSchema>;
 export type SubmitAnswerInput = z.infer<typeof submitAnswerSchema>;

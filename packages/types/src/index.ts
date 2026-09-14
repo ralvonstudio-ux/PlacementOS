@@ -1590,6 +1590,9 @@ export interface TestForCandidate {
   violationLimit: number;
   questionCount: number;
   scheduledAt?: string;
+  /** Whether staff have sent out an access code yet — the test can't be started until they do,
+   *  even after `scheduledAt` has passed. */
+  codeIssued: boolean;
   /** Set once the candidate has an attempt in progress or submitted for this test. */
   attemptStatus?: TestAttemptStatus;
   /** Set once the candidate's attempt has been scored (i.e. submitted). */
@@ -1668,13 +1671,26 @@ export interface TestAttemptReview {
 }
 
 export interface StartTestPayload {
-  /** The one-time code issued in the candidate's notification when the test opened. */
+  /** The one-time code a staff member sent the candidate in a notification. */
   accessCode: string;
+}
+
+/** Staff action: (re)generates the test's access code and sends it, as a notification,
+ *  to exactly these candidates (must be in the test's batch). */
+export interface SendAccessCodePayload {
+  candidateIds: string[];
 }
 
 // ── Notifications ────────────────────────────────────────────────────────────
 
-export type NotificationType = 'test_access_code';
+export type NotificationType = 'test_access_code' | 'staff_message';
+
+/** Staff action: a free-form one-way announcement to chosen candidates. */
+export interface SendStaffMessagePayload {
+  candidateIds: string[];
+  title: string;
+  body: string;
+}
 
 export interface Notification {
   _id: string;

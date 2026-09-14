@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ShieldCheck, Plus, Trash2, Send, Lock, CheckCircle2, XCircle, Sparkles } from 'lucide-react';
+import { ShieldCheck, Plus, Trash2, Send, Lock, CheckCircle2, XCircle, Sparkles, KeyRound } from 'lucide-react';
 import { PageContainer } from '@/components/workspace/PageContainer';
 import { WorkspaceHeader } from '@/components/workspace/WorkspaceHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -130,9 +130,14 @@ export function TpoTestsPage() {
                     </button>
                   )}
                   {t.status === 'published' && (
-                    <button onClick={() => close(t._id)} className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-gray-200 hover:bg-gray-50 text-xs font-semibold text-gray-700 transition-colors">
-                      <Lock className="w-3.5 h-3.5" /> Close
-                    </button>
+                    <>
+                      <button onClick={() => navigate(`/messages?testId=${t._id}`)} className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-violet-600 hover:bg-violet-700 text-xs font-semibold text-white transition-colors">
+                        <KeyRound className="w-3.5 h-3.5" /> Send Access Code
+                      </button>
+                      <button onClick={() => close(t._id)} className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-gray-200 hover:bg-gray-50 text-xs font-semibold text-gray-700 transition-colors">
+                        <Lock className="w-3.5 h-3.5" /> Close
+                      </button>
+                    </>
                   )}
                   <button onClick={() => navigate(`${basePath}/tests/${t._id}/review`)} className="h-8 px-3 rounded-lg border border-gray-200 hover:bg-gray-50 text-xs font-semibold text-gray-700 transition-colors">
                     Review

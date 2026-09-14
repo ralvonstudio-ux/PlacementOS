@@ -7,10 +7,12 @@ const router = Router();
 
 router.use(authenticate);
 
-// Candidate-facing only for now — the sole notification type today (test access codes)
-// only ever targets candidates.
+// Candidate-facing — reading their own notifications.
 router.get('/mine', authorize('candidate'), notificationController.listMine);
 router.patch('/:id/read', authorize('candidate'), notificationController.markRead);
 router.patch('/read-all', authorize('candidate'), notificationController.markAllRead);
+
+// Staff-facing — composing a one-way message to chosen candidates.
+router.post('/send', authorize('admin', 'tpo', 'faculty'), notificationController.send);
 
 export default router;

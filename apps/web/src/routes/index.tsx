@@ -72,7 +72,7 @@ const TestTakingPage = lazy(() => import('@/features/tests/pages/TestTakingPage'
 
 // ── Shared ─────────────────────────────────────────────────────────────────
 const SettingsPage = lazy(() => import('@/features/auth/pages/SettingsPage').then((m) => ({ default: m.SettingsPage })));
-const MessagesPage = lazy(() => import('@/pages/MessagesPage').then((m) => ({ default: m.MessagesPage })));
+const MessagesPage = lazy(() => import('@/features/messages/pages/MessagesPage').then((m) => ({ default: m.MessagesPage })));
 
 /** Wraps every route in AuthProvider — needs to be inside the router (it calls useNavigate). */
 function RootLayout() {

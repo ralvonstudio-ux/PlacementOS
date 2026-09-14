@@ -22,6 +22,7 @@ router.patch('/:id', authorize('admin', 'tpo', 'faculty'), testController.update
 router.patch('/:id/submit-for-approval', authorize('admin', 'tpo', 'faculty'), testController.submitForApproval);
 router.patch('/:id/review', authorize('admin', 'tpo'), testController.review);
 router.patch('/:id/publish', authorize('admin', 'tpo', 'faculty'), testController.publish);
+router.post('/:id/send-access-code', authorize('admin', 'tpo', 'faculty'), testController.sendAccessCode);
 router.patch('/:id/close', authorize('admin', 'tpo', 'faculty'), testController.close);
 router.delete('/:id', authorize('admin', 'tpo', 'faculty'), testController.remove);
 router.get('/:id/review', authorize('admin', 'tpo', 'faculty'), testController.getReview);

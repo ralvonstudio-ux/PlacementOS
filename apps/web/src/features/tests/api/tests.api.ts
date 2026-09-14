@@ -8,6 +8,7 @@ import type {
   TestForCandidate,
   StartTestAttemptResult,
   StartTestPayload,
+  SendAccessCodePayload,
   TestAttempt,
   SubmitAnswerPayload,
   LogViolationPayload,
@@ -64,6 +65,13 @@ export const testsApi = {
   async publish(id: string): Promise<Test> {
     try {
       const res = await apiClient.patch<ApiResponse<Test>>(`${BASE}/${id}/publish`);
+      return res.data.data!;
+    } catch (err) { throw new Error(extractErrorMessage(err)); }
+  },
+
+  async sendAccessCode(id: string, payload: SendAccessCodePayload): Promise<{ sentCount: number }> {
+    try {
+      const res = await apiClient.post<ApiResponse<{ sentCount: number }>>(`${BASE}/${id}/send-access-code`, payload);
       return res.data.data!;
     } catch (err) { throw new Error(extractErrorMessage(err)); }
   },

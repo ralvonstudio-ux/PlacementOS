@@ -4,6 +4,7 @@ import {
   createTestSchema,
   updateTestSchema,
   startTestSchema,
+  sendAccessCodeSchema,
   submitAnswerSchema,
   logViolationSchema,
   generateTestDraftSchema,
@@ -71,41 +72,6 @@ function generateAccessCode(length = 6): string {
   let code = '';
   for (let i = 0; i < length; i++) code += ACCESS_CODE_ALPHABET[Math.floor(Math.random() * ACCESS_CODE_ALPHABET.length)];
   return code;
-}
-
-/** The one place the access code exists in plaintext: generated here, hashed for storage
- *  (same bcrypt approach the app already uses for login passwords — never stored or logged
- *  in the clear), and handed to every candidate in the test's batch as a notification. Guarded
- *  by `claimAccessCodeIssuance`'s atomic filter so this can safely be called speculatively
- *  from a read path (see `maybeActivateScheduledTest`) without risking a duplicate code or a
- *  duplicate notification if two requests race. */
-async function issueAccessCodeAndNotify(test: ITest): Promise<void> {
-  const code = generateAccessCode();
-  const accessCodeHash = await bcrypt.hash(code, ACCESS_CODE_SALT_ROUNDS);
-  const claimed = await testRepository.claimAccessCodeIssuance(String(test._id), test.instituteId, accessCodeHash);
-  if (!claimed) return; // another request already issued it
-
-  const candidates = await candidateRepository.findByBatch(test.instituteId, test.batch);
-  await notificationRepository.createForRecipients(
-    test.instituteId,
-    candidates.map((c) => ({
-      recipientId: String((c as unknown as { _id: { toString(): string } })._id),
-      type: 'test_access_code' as const,
-      title: `${test.title} is now open`,
-      body: `Your access code is ${code}. Enter it on the test's start screen — it works once you begin.`,
-      relatedTestId: String(test._id),
-    }))
-  );
-}
-
-/** Published, in the right batch, and (if scheduled) past its opening time — but not yet
- *  carrying an access code — means "just opened, nobody's issued the code yet." Called from
- *  every candidate-facing read/start so the very first request after opening time triggers
- *  issuance; the atomic claim inside `issueAccessCodeAndNotify` keeps concurrent callers safe. */
-async function maybeActivateScheduledTest(test: ITest): Promise<void> {
-  if (test.status !== 'published' || test.accessCodeIssuedAt) return;
-  if (test.scheduledAt && new Date() < new Date(test.scheduledAt)) return;
-  await issueAccessCodeAndNotify(test);
 }
 
 /** Auto-grades MCQ + exact-match short-answer questions. Open-ended answers with no
@@ -205,10 +171,47 @@ export const testService = {
     const updated = await testRepository.update(id, ctx.instituteId, { status: 'published' } as never);
     if (!updated) throw new NotFoundError('Test');
 
-    // Opens immediately (no future scheduledAt) — issue the access code and notify the batch
-    // right away rather than waiting for a candidate's first read to trigger it.
-    await maybeActivateScheduledTest(updated);
+    // Publishing only makes the test visible to its batch — it stays unstartable until a
+    // staff member explicitly sends the access code (see sendAccessCode below). No code is
+    // generated here, so there's nothing to leak by simply publishing.
     return toTestApiShape(updated);
+  },
+
+  /** Staff-only: (re)generates the access code and delivers it — as a notification containing
+   *  the one-time plaintext — to exactly the given candidates, and no one else. Regenerating
+   *  overwrites any previously issued code, so a later send to a different/expanded group
+   *  invalidates whatever was sent before; staff should include everyone who still needs it
+   *  in one call. The plaintext exists only in this function's memory for the one request —
+   *  it's never returned to the caller or logged, only bcrypt-hashed at rest (same primitive
+   *  the app already uses for login passwords) and embedded straight into the notifications. */
+  async sendAccessCode(testId: string, rawInput: unknown, ctx: AuthContext): Promise<{ sentCount: number }> {
+    const { candidateIds } = sendAccessCodeSchema.parse(rawInput);
+    const test = await testRepository.findById(testId, ctx.instituteId);
+    if (!test) throw new NotFoundError('Test');
+    if (test.status !== 'published') throw new ValidationError('Only a published test can have its access code sent');
+
+    const candidates = await candidateRepository.findAllForSchoolByIds(candidateIds, ctx.instituteId);
+    const recipientIds = candidates
+      .filter((c) => c.batch === test.batch)
+      .map((c) => String((c as unknown as { _id: { toString(): string } })._id));
+    if (recipientIds.length === 0) throw new ValidationError("None of the selected candidates are in this test's batch");
+
+    const code = generateAccessCode();
+    const accessCodeHash = await bcrypt.hash(code, ACCESS_CODE_SALT_ROUNDS);
+    await testRepository.setAccessCode(testId, ctx.instituteId, accessCodeHash);
+
+    await notificationRepository.createForRecipients(
+      ctx.instituteId,
+      recipientIds.map((id) => ({
+        recipientId: id,
+        type: 'test_access_code' as const,
+        title: `${test.title} — access code`,
+        body: `Your access code is ${code}. Enter it on the test's start screen — it works once you begin.`,
+        relatedTestId: testId,
+      }))
+    );
+
+    return { sentCount: recipientIds.length };
   },
 
   async close(id: string, ctx: AuthContext): Promise<TestApiShape> {
@@ -261,7 +264,6 @@ export const testService = {
     const tests = await testRepository.findPublishedForBatch(ctx.instituteId, candidate.batch);
     const results: TestForCandidate[] = [];
     for (const t of tests) {
-      await maybeActivateScheduledTest(t);
       const attempt = await testAttemptRepository.findByTestAndCandidate(String((t as unknown as { _id: { toString(): string } })._id), candidateId, ctx.instituteId);
       results.push({
         _id: String((t as unknown as { _id: { toString(): string } })._id),
@@ -273,6 +275,7 @@ export const testService = {
         violationLimit: t.violationLimit,
         questionCount: t.questions.length,
         scheduledAt: t.scheduledAt ? new Date(t.scheduledAt).toISOString() : undefined,
+        codeIssued: !!t.accessCodeIssuedAt,
         attemptStatus: attempt?.status,
         score: attempt?.status === 'submitted' ? attempt.score : undefined,
       });
@@ -285,7 +288,7 @@ export const testService = {
     const candidate = await candidateRepository.findById(candidateId, ctx.instituteId);
     if (!candidate) throw new NotFoundError('Candidate');
 
-    let test = await testRepository.findById(testId, ctx.instituteId);
+    const test = await testRepository.findById(testId, ctx.instituteId);
     if (!test || test.status !== 'published' || test.batch !== candidate.batch) throw new NotFoundError('Test');
     if (test.scheduledAt && new Date() < new Date(test.scheduledAt)) {
       throw new ForbiddenError(`This test opens at ${new Date(test.scheduledAt).toLocaleString()}`);
@@ -297,13 +300,12 @@ export const testService = {
     // A returning candidate resuming an in-progress attempt doesn't need to re-enter the code —
     // only the very first start of an attempt is gated on it.
     if (!attempt) {
-      await maybeActivateScheduledTest(test);
-      const refreshed = await testRepository.findById(testId, ctx.instituteId); // may now carry accessCodeHash
-      if (!refreshed) throw new NotFoundError('Test');
-      test = refreshed;
+      if (!test.accessCodeHash) {
+        throw new ForbiddenError('This test has not been unlocked yet — wait for your access code from your TPO/faculty.');
+      }
 
       const { accessCode } = startTestSchema.parse(rawInput);
-      const isValid = !!test.accessCodeHash && (await bcrypt.compare(accessCode, test.accessCodeHash));
+      const isValid = await bcrypt.compare(accessCode, test.accessCodeHash);
       if (!isValid) throw new ForbiddenError('Incorrect access code');
 
       attempt = await testAttemptRepository.create(ctx.instituteId, testId, candidateId);

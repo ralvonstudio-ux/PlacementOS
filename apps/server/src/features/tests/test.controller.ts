@@ -52,6 +52,14 @@ export const testController = {
     } catch (err) { next(err); }
   },
 
+  async sendAccessCode(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const ctx = buildAuthContext(req.user!, req.ip ?? undefined);
+      const result = await testService.sendAccessCode(req.params.id, req.body, ctx);
+      sendSuccess(res, result, `Access code sent to ${result.sentCount} candidate(s)`);
+    } catch (err) { next(err); }
+  },
+
   async close(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const ctx = buildAuthContext(req.user!, req.ip ?? undefined);

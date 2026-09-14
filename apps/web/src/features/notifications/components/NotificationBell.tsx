@@ -1,7 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
-import { Bell, CheckCheck, KeyRound } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Bell, CheckCheck, KeyRound, MessageSquare } from 'lucide-react';
 import { useAuth } from '@/features/auth/hooks/useAuth';
 import { useMyNotifications, useMarkNotificationRead, useMarkAllNotificationsRead } from '../hooks/useNotifications';
+import type { NotificationType } from '@placementos/types';
+
+const NOTIFICATION_ICON: Record<NotificationType, typeof KeyRound> = {
+  test_access_code: KeyRound,
+  staff_message: MessageSquare,
+};
 
 function timeAgo(iso: string): string {
   const seconds = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
@@ -15,6 +22,7 @@ function timeAgo(iso: string): string {
 
 export function NotificationBell() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -67,26 +75,36 @@ export function NotificationBell() {
               <p className="px-4 py-8 text-center text-sm text-gray-400">No notifications yet.</p>
             ) : (
               <div className="divide-y divide-gray-50">
-                {notifications.map((n) => (
-                  <button
-                    key={n._id}
-                    onClick={() => { if (!n.readAt) markRead(n._id); }}
-                    className={`w-full text-left px-4 py-3 transition-colors hover:bg-gray-50 ${!n.readAt ? 'bg-violet-50/50' : ''}`}
-                  >
-                    <div className="flex items-start gap-2.5">
-                      <KeyRound className="w-4 h-4 text-violet-500 mt-0.5 shrink-0" />
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-gray-900">{n.title}</p>
-                        <p className="text-xs text-gray-500 mt-0.5 break-words">{n.body}</p>
-                        <p className="text-[11px] text-gray-400 mt-1">{timeAgo(n.createdAt)}</p>
+                {notifications.map((n) => {
+                  const Icon = NOTIFICATION_ICON[n.type] ?? MessageSquare;
+                  return (
+                    <button
+                      key={n._id}
+                      onClick={() => { if (!n.readAt) markRead(n._id); }}
+                      className={`w-full text-left px-4 py-3 transition-colors hover:bg-gray-50 ${!n.readAt ? 'bg-violet-50/50' : ''}`}
+                    >
+                      <div className="flex items-start gap-2.5">
+                        <Icon className="w-4 h-4 text-violet-500 mt-0.5 shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-gray-900">{n.title}</p>
+                          <p className="text-xs text-gray-500 mt-0.5 break-words">{n.body}</p>
+                          <p className="text-[11px] text-gray-400 mt-1">{timeAgo(n.createdAt)}</p>
+                        </div>
+                        {!n.readAt && <span className="w-2 h-2 rounded-full bg-violet-500 shrink-0 mt-1.5" />}
                       </div>
-                      {!n.readAt && <span className="w-2 h-2 rounded-full bg-violet-500 shrink-0 mt-1.5" />}
-                    </div>
-                  </button>
-                ))}
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
+
+          <button
+            onClick={() => { setOpen(false); navigate('/messages'); }}
+            className="w-full text-center py-2.5 text-xs font-semibold text-violet-600 hover:bg-gray-50 border-t border-gray-50 transition-colors"
+          >
+            See all in Messages
+          </button>
         </div>
       )}
     </div>

@@ -1,5 +1,5 @@
 import { apiClient, extractErrorMessage } from '@/services/api';
-import type { ApiResponse, Notification } from '@placementos/types';
+import type { ApiResponse, Notification, SendStaffMessagePayload } from '@placementos/types';
 
 const BASE = '/notifications';
 
@@ -26,6 +26,13 @@ export const notificationsApi = {
   async markAllRead(): Promise<void> {
     try {
       await apiClient.patch(`${BASE}/read-all`);
+    } catch (err) { throw new Error(extractErrorMessage(err)); }
+  },
+
+  async send(payload: SendStaffMessagePayload): Promise<{ sentCount: number }> {
+    try {
+      const res = await apiClient.post<ApiResponse<{ sentCount: number }>>(`${BASE}/send`, payload);
+      return res.data.data!;
     } catch (err) { throw new Error(extractErrorMessage(err)); }
   },
 };

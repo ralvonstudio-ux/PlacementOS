@@ -3,6 +3,7 @@ import { testsApi } from '../api/tests.api';
 import type {
   CreateTestPayload,
   StartTestPayload,
+  SendAccessCodePayload,
   GenerateTestDraftPayload,
   ReviewTestPayload,
   SubmitAnswerPayload,
@@ -66,6 +67,9 @@ export const usePublishTest = () => {
     onSuccess: () => qc.invalidateQueries({ queryKey: testKeys.all }),
   });
 };
+
+export const useSendAccessCode = () =>
+  useMutation({ mutationFn: ({ id, payload }: { id: string; payload: SendAccessCodePayload }) => testsApi.sendAccessCode(id, payload) });
 
 export const useCloseTest = () => {
   const qc = useQueryClient();

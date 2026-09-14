@@ -1,6 +1,6 @@
 import { startTransition } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ShieldCheck, PlayCircle, CheckCircle2 } from 'lucide-react';
+import { ShieldCheck, PlayCircle, CheckCircle2, KeyRound } from 'lucide-react';
 import { PageContainer } from '@/components/workspace/PageContainer';
 import { WorkspaceHeader } from '@/components/workspace/WorkspaceHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -24,6 +24,9 @@ export function TestListPage() {
         <div className="grid gap-4 sm:grid-cols-2">
           {tests.map((t) => {
             const notYetOpen = !!t.scheduledAt && new Date(t.scheduledAt) > new Date();
+            // A returning candidate resuming an attempt doesn't need the code — only blocks a
+            // fresh start, which is exactly when the server itself would reject it anyway.
+            const waitingForCode = !notYetOpen && !t.codeIssued && !t.attemptStatus;
             return (
               <div key={t._id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex flex-col">
                 <div className="flex items-start justify-between">
@@ -40,17 +43,29 @@ export function TestListPage() {
 
                 {notYetOpen ? (
                   <p className="text-xs text-violet-600 mt-3">Opens {new Date(t.scheduledAt!).toLocaleString()}</p>
+                ) : waitingForCode ? (
+                  <p className="text-xs text-gray-500 mt-3 flex items-center gap-1.5">
+                    <KeyRound className="w-3.5 h-3.5" /> Waiting for your TPO/faculty to send the access code
+                  </p>
                 ) : (
                   <p className="text-xs text-amber-600 mt-3">Violation limit: {t.violationLimit} — exceeding it auto-submits your attempt.</p>
                 )}
 
                 <button
                   onClick={() => startTransition(() => navigate(`/candidate/tests/${t._id}/attempt`))}
-                  disabled={t.attemptStatus === 'submitted' || notYetOpen}
+                  disabled={t.attemptStatus === 'submitted' || notYetOpen || waitingForCode}
                   className="mt-4 inline-flex items-center justify-center gap-2 h-10 rounded-xl bg-violet-600 hover:bg-violet-700 text-sm font-semibold text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <PlayCircle className="w-4 h-4" />
-                  {t.attemptStatus === 'in_progress' ? 'Resume Test' : t.attemptStatus === 'submitted' ? 'Already Submitted' : notYetOpen ? 'Not Yet Open' : 'Start Test'}
+                  {t.attemptStatus === 'in_progress'
+                    ? 'Resume Test'
+                    : t.attemptStatus === 'submitted'
+                      ? 'Already Submitted'
+                      : notYetOpen
+                        ? 'Not Yet Open'
+                        : waitingForCode
+                          ? 'Awaiting Access Code'
+                          : 'Start Test'}
                 </button>
               </div>
             );

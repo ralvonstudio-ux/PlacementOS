@@ -27,4 +27,12 @@ export const notificationController = {
       sendSuccess(res, null, 'All notifications marked as read');
     } catch (err) { next(err); }
   },
+
+  async send(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const ctx = buildAuthContext(req.user!, req.ip ?? undefined);
+      const result = await notificationService.sendStaffMessage(req.body, ctx);
+      sendSuccess(res, result, `Message sent to ${result.sentCount} candidate(s)`);
+    } catch (err) { next(err); }
+  },
 };

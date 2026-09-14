@@ -41,13 +41,13 @@ export const testRepository = {
     return res.modifiedCount > 0;
   },
 
-  /** Atomically claims "issue the access code for this test" — the filter only matches a
-   *  test that hasn't been issued one yet, so two concurrent callers (e.g. two candidates'
-   *  requests racing to activate the same just-opened test) can't both win and double-notify
-   *  the batch. Returns the updated test only to the caller that actually won the race. */
-  async claimAccessCodeIssuance(id: string, instituteId: string, accessCodeHash: string): Promise<ITest | null> {
+  /** Sets (or rotates) the test's access code — a staff-only, explicit action, so unlike most
+   *  access-code schemes this doesn't need a race guard: whoever calls it last simply wins,
+   *  which is fine since the caller (testService.sendAccessCode) always regenerates the code
+   *  fresh and re-notifies exactly the candidates it's sending to in that same call. */
+  async setAccessCode(id: string, instituteId: string, accessCodeHash: string): Promise<ITest | null> {
     return Test.findOneAndUpdate(
-      { _id: id, instituteId, accessCodeIssuedAt: { $exists: false } },
+      { _id: id, instituteId, isDeleted: false },
       { $set: { accessCodeHash, accessCodeIssuedAt: new Date() } },
       { new: true }
     );
