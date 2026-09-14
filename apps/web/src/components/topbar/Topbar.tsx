@@ -1,9 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Menu, ChevronDown, Clock, Settings, LogOut } from 'lucide-react';
+import { Menu, ChevronDown, Clock, Settings, LogOut, ArrowLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/features/auth/hooks/useAuth';
 import { NotificationBell } from '@/features/notifications/components/NotificationBell';
+import { getHomePathForRole } from '@/features/auth/utils/roleHome';
+
+/** Root dashboard for each role — no "back" makes sense from here. */
+const HOME_PATHS = new Set(['/candidate', '/faculty', '/tpo', '/admin']);
 
 const WORKSPACE_LABELS: Record<string, string> = {
   '/faculty': 'Trainer Workspace',
@@ -95,6 +99,7 @@ interface TopbarProps {
 
 export const Topbar = ({ onMenuToggle }: TopbarProps) => {
   const location = useLocation();
+  const navigate = useNavigate();
   const { user } = useAuth();
 
   const ROLE_LABELS: Record<string, string> = { faculty: 'Trainer', tpo: 'TPO', candidate: 'Student' };
@@ -109,9 +114,29 @@ export const Topbar = ({ onMenuToggle }: TopbarProps) => {
   const initials = user ? `${user.firstName[0] ?? ''}${user.lastName[0] ?? ''}`.toUpperCase() : '?';
   const displayName = user ? `${user.firstName} ${user.lastName}` : '';
 
+  // Tracks how many in-app navigations have happened this session, so the back
+  // arrow can pop the SPA history when there's somewhere to go back to, and
+  // fall back to the role's dashboard when the page was opened directly (e.g.
+  // a fresh tab or a deep link) where navigate(-1) would exit the app instead.
+  const navDepth = useRef(0);
+  const isFirstRender = useRef(true);
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    navDepth.current += 1;
+  }, [location.pathname]);
+
+  const showBack = !!user && !HOME_PATHS.has(location.pathname);
+  const handleBack = () => {
+    if (navDepth.current > 0) navigate(-1);
+    else navigate(user ? getHomePathForRole(user.role) : '/');
+  };
+
   return (
-    <header className="sticky top-0 z-10 flex h-[60px] items-center border-b px-8 bg-white border-[#E8E8E8]">
-      <div className="flex items-center w-full gap-4 max-w-7xl mx-auto">
+    <header className="sticky top-0 z-10 flex h-[60px] items-center border-b px-4 sm:px-8 bg-white border-[#E8E8E8]">
+      <div className="flex items-center w-full gap-2 sm:gap-4 max-w-7xl mx-auto">
         <button
           onClick={onMenuToggle}
           className="p-2 -ml-1 rounded-xl transition-colors lg:hidden text-gray-500 hover:bg-violet-50 hover:text-violet-700"
@@ -120,8 +145,19 @@ export const Topbar = ({ onMenuToggle }: TopbarProps) => {
           <Menu className="w-5 h-5" />
         </button>
 
+        {showBack && (
+          <button
+            onClick={handleBack}
+            className="p-2 -ml-1 rounded-xl transition-colors text-gray-500 hover:bg-violet-50 hover:text-violet-700 active:scale-95"
+            aria-label="Go back"
+            title="Back"
+          >
+            <ArrowLeft className="w-[18px] h-[18px]" />
+          </button>
+        )}
+
         <nav aria-label="breadcrumb" className="flex items-center gap-1.5 shrink-0">
-          <span className="text-sm font-semibold text-gray-900">{section}</span>
+          <span className="text-sm font-semibold text-gray-900 truncate max-w-[40vw] sm:max-w-none">{section}</span>
         </nav>
 
         <div className="ml-auto flex items-center gap-2">

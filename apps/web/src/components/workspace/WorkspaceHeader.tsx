@@ -15,17 +15,17 @@ export const WorkspaceHeader = ({ title, subtitle, action, backTo, backLabel }: 
   return (
     <div>
       {backTo && <BackLink to={backTo} label={backLabel ?? 'Back'} />}
-      <div className="flex items-start justify-between mb-10">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 tracking-tight leading-tight">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between mb-8 sm:mb-10">
+        <div className="min-w-0">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight leading-tight break-words">
             {title}
           </h1>
           {subtitle && (
-            <p className="text-base text-gray-500 mt-1.5 leading-relaxed">{subtitle}</p>
+            <p className="text-sm sm:text-base text-gray-500 mt-1.5 leading-relaxed">{subtitle}</p>
           )}
         </div>
         {action && (
-          <div className="ml-6 flex-shrink-0 mt-1">{action}</div>
+          <div className="sm:ml-6 shrink-0 sm:mt-1">{action}</div>
         )}
       </div>
     </div>

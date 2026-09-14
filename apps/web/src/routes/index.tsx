@@ -62,7 +62,6 @@ const TestReviewPage = lazy(() => import('@/features/tests/pages/TestReviewPage'
 // ── Candidate pages ──────────────────────────────────────────────────────────
 const CandidateDashboardPage = lazy(() => import('@/features/candidate-profile/pages/CandidateDashboardPage').then((m) => ({ default: m.CandidateDashboardPage })));
 const ResumeBuilderPage = lazy(() => import('@/features/candidate-profile/pages/ResumeBuilderPage').then((m) => ({ default: m.ResumeBuilderPage })));
-const LeetCodeProfilePage = lazy(() => import('@/features/candidate-profile/pages/LeetCodeProfilePage').then((m) => ({ default: m.LeetCodeProfilePage })));
 const PracticeBrowsePage = lazy(() => import('@/features/practice/pages/PracticeBrowsePage').then((m) => ({ default: m.PracticeBrowsePage })));
 const CandidatePracticeSheetsPage = lazy(() => import('@/features/practice/pages/CandidatePracticeSheetsPage').then((m) => ({ default: m.CandidatePracticeSheetsPage })));
 const TestListPage = lazy(() => import('@/features/tests/pages/TestListPage').then((m) => ({ default: m.TestListPage })));
@@ -170,7 +169,7 @@ export const router = createBrowserRouter([
                 children: [
                   { index: true, element: <CandidateDashboardPage /> },
                   { path: 'resume', element: <ResumeBuilderPage /> },
-                  { path: 'leetcode', element: <LeetCodeProfilePage /> },
+                  { path: 'leetcode', element: <Navigate to="/candidate" replace /> },
                   { path: 'practice/:category', element: <PracticeBrowsePage /> },
                   { path: 'practice-sheets', element: <CandidatePracticeSheetsPage /> },
                   { path: 'tests', element: <TestListPage /> },
