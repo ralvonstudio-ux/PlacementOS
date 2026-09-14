@@ -91,7 +91,7 @@ export function AcademicPlanPage() {
 
   async function handleDeletePlan() {
     if (!plan) return;
-    if (!window.confirm('Delete this academic plan? This cannot be undone.')) return;
+    if (!window.confirm('Delete this training plan? This cannot be undone.')) return;
     await removePlan(plan._id);
   }
 
@@ -131,7 +131,7 @@ export function AcademicPlanPage() {
           <ArrowLeft className="w-4 h-4 text-gray-600" />
         </button>
         <div className="min-w-0">
-          <h1 className="text-lg sm:text-xl font-bold text-gray-900 truncate">Academic Plan</h1>
+          <h1 className="text-lg sm:text-xl font-bold text-gray-900 truncate">Training Plan</h1>
           <p className="text-xs text-gray-400">Put in the syllabus — get a week-by-week plan, editable anytime</p>
         </div>
       </div>
@@ -160,14 +160,14 @@ export function AcademicPlanPage() {
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
           <div className="flex items-center gap-2 mb-4">
             <Sparkles className="w-4 h-4 text-violet-600" />
-            <h2 className="text-sm font-bold text-gray-900">{plan ? 'Regenerate Plan' : 'Create Academic Plan'}</h2>
+            <h2 className="text-sm font-bold text-gray-900">{plan ? 'Regenerate Plan' : 'Create Training Plan'}</h2>
           </div>
 
           <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Title (optional)</label>
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder={selected ? `${selected.track} — Academic Plan` : 'Academic Plan'}
+            placeholder={selected ? `${selected.track} — Training Plan` : 'Training Plan'}
             className="w-full h-10 px-3 mb-4 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-500"
           />
 

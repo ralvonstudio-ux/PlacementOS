@@ -272,40 +272,6 @@ export interface SubstituteSuggestion {
   available: boolean;
 }
 
-// ── Training Plan (was Academic Plan) ────────────────────────────────────
-export type TrainingPlanBlockType = 'module' | 'assessment' | 'event' | 'holiday' | 'other';
-export type TrainingPlanStatus = 'planned' | 'in_progress' | 'completed' | 'skipped';
-
-export interface TrainingPlanDay {
-  date: string;
-  blockType: TrainingPlanBlockType;
-  moduleId?: string;
-  title: string;
-  status: TrainingPlanStatus;
-  notes?: string;
-  /** Set when a module was picked for this day — lets the UI show the
-   *  module's canonical name alongside a custom `title`/topic. */
-  moduleName?: string;
-  /** Set when carry-forward pushed an incomplete day onto this date. */
-  carriedFromDate?: string;
-  /** True once a faculty member hand-edits an auto-generated day. */
-  manuallyEdited?: boolean;
-}
-
-export interface TrainingPlan {
-  _id: string;
-  instituteId: string;
-  facultyId: string;
-  batch: string;
-  track: string;
-  weekStartDate: string;
-  days: TrainingPlanDay[];
-  createdAt: string;
-  updatedAt: string;
-  /** Incremented each time the plan is (re)generated. */
-  version?: number;
-}
-
 // ── Module Tracker (was Syllabus Tracker) ────────────────────────────────
 export interface TrainingModule {
   _id: string;
@@ -1237,65 +1203,6 @@ export interface FacultyWorkspaceData {
     totalSessionsToday: number;
   };
   generatedAt: string;
-}
-
-// ── Training Plan — generation, day edits, TPO oversight, alerts ─────────
-export interface GenerateTrainingPlanPayload {
-  batch: string;
-  track: string;
-}
-
-export interface TrainingPlanGenerationWarning {
-  message: string;
-}
-
-export interface TrainingPlanGenerationResult {
-  plan: TrainingPlan;
-  warnings: TrainingPlanGenerationWarning[];
-}
-
-export interface SetTrainingPlanDayStatusPayload {
-  date: string;
-  status: TrainingPlanStatus;
-}
-
-export interface EditTrainingPlanDayPayload {
-  date: string;
-  moduleId?: string;
-  moduleName?: string;
-  title?: string;
-  blockType?: TrainingPlanBlockType;
-}
-
-export interface MoveTrainingPlanDayPayload {
-  fromDate: string;
-  toDate: string;
-}
-
-/** One row per faculty+batch+track combination with a plan — TPO's
- *  read-only oversight listing (`GET /training-plan/tpo/overview`). */
-export interface TrainingPlanTpoOverviewEntry {
-  facultyId: string;
-  facultyName: string;
-  batch: string;
-  track: string;
-  hasPlan: boolean;
-  totalDays: number;
-  completedDays: number;
-}
-
-export type TrainingPlanAlertSeverity = 'critical' | 'warning' | 'info';
-
-export interface TrainingPlanAlert {
-  _id: string;
-  instituteId: string;
-  facultyId: string;
-  facultyName: string;
-  batch?: string;
-  track?: string;
-  severity: TrainingPlanAlertSeverity;
-  message: string;
-  createdAt: string;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
