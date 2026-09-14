@@ -267,20 +267,12 @@ export function TestTakingPage() {
     }
 
     try {
-      await document.documentElement.requestFullscreen();
-    } catch {
-      setError('Fullscreen mode is required to start this test — please allow it and try again.');
-      return;
-    }
-
-    try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: true });
       streamRef.current = stream;
       if (videoRef.current) videoRef.current.srcObject = stream;
       stream.getVideoTracks()[0]?.addEventListener('ended', () => reportViolation('no_face', 'Camera stream ended'));
     } catch {
       setCameraError('Camera access is required for this test. Please allow camera permission and try again.');
-      exitFullscreenIfActive();
       return;
     }
 
@@ -294,7 +286,20 @@ export function TestTakingPage() {
     } catch {
       setScreenShareError('Screen sharing is required for this test. Please allow it and try again.');
       stopMediaStreams();
-      exitFullscreenIfActive();
+      return;
+    }
+
+    // Fullscreen is requested LAST, after every permission prompt/picker — Chrome (and most
+    // browsers) silently drops out of fullscreen the moment a native picker like
+    // getDisplayMedia's "share this tab/window" dialog needs to show, so requesting it earlier
+    // (as this used to) meant fullscreen never actually stuck: it engaged, then the screen-share
+    // picker kicked it right back out before the test ever reached `in_progress`, leaving the
+    // full browser chrome visible for the whole attempt with no violation ever logged for it.
+    try {
+      await document.documentElement.requestFullscreen();
+    } catch {
+      setError('Fullscreen mode is required to start this test — please allow it and try again.');
+      stopMediaStreams();
       return;
     }
 
@@ -314,6 +319,10 @@ export function TestTakingPage() {
       const elapsedSeconds = Math.max(0, Math.floor((serverNowMs - startedAtMs) / 1000));
       const totalSeconds = result.durationMinutes * 60;
       setSecondsLeft(Math.max(0, totalSeconds - elapsedSeconds));
+      // Belt-and-suspenders: if fullscreen somehow isn't actually active the moment the test
+      // starts (a browser quirk, or it got dropped between the request above and now), show the
+      // same recovery overlay immediately instead of silently running windowed.
+      if (!document.fullscreenElement) setFullscreenLost(true);
       setPhase('in_progress');
     } catch (err) {
       setError(extractErrorMessage(err));
@@ -474,13 +483,30 @@ export function TestTakingPage() {
         </div>
       )}
 
-      <main className={`flex-1 flex flex-col w-full px-6 py-8 mx-auto ${isCoding ? 'max-w-5xl' : 'max-w-3xl'}`}>
+      <main className={`flex-1 flex flex-col w-full px-6 py-8 mx-auto ${isCoding ? 'max-w-7xl' : 'max-w-3xl'}`}>
         <div className="flex items-center justify-between mb-6">
           <span className="text-sm text-gray-500">Question {currentIndex + 1} of {questions.length}</span>
           <span className="text-sm text-gray-500">{question?.marks} mark{question?.marks === 1 ? '' : 's'}</span>
         </div>
 
-        {question && (
+        {question && isCoding ? (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 flex-1 min-h-0">
+            <div className="bg-white border border-gray-100 shadow-sm rounded-2xl p-6 lg:overflow-y-auto lg:max-h-[70vh]">
+              <p className="text-base text-gray-900 whitespace-pre-wrap">{question.questionText}</p>
+            </div>
+            <div className="bg-white border border-gray-100 shadow-sm rounded-2xl p-6">
+              <CodingQuestionPanel
+                attemptId={attemptIdRef.current}
+                questionIndex={currentIndex}
+                question={question}
+                code={answerFor(currentIndex).code ?? question.starterCode?.[answerFor(currentIndex).language ?? question.allowedLanguages?.[0] ?? 'python'] ?? ''}
+                language={answerFor(currentIndex).language ?? question.allowedLanguages?.[0] ?? 'python'}
+                onChange={(patch) => setAnswer(currentIndex, patch)}
+                disabled={fullscreenLost}
+              />
+            </div>
+          </div>
+        ) : question && (
           <div className="bg-white border border-gray-100 shadow-sm rounded-2xl p-6 flex-1">
             <p className="text-base text-gray-900 mb-6 whitespace-pre-wrap">{question.questionText}</p>
 
@@ -493,16 +519,6 @@ export function TestTakingPage() {
                   </label>
                 ))}
               </div>
-            ) : question.questionType === 'coding' ? (
-              <CodingQuestionPanel
-                attemptId={attemptIdRef.current}
-                questionIndex={currentIndex}
-                question={question}
-                code={answerFor(currentIndex).code ?? question.starterCode?.[answerFor(currentIndex).language ?? question.allowedLanguages?.[0] ?? 'python'] ?? ''}
-                language={answerFor(currentIndex).language ?? question.allowedLanguages?.[0] ?? 'python'}
-                onChange={(patch) => setAnswer(currentIndex, patch)}
-                disabled={fullscreenLost}
-              />
             ) : (
               <textarea
                 value={answerFor(currentIndex).answerText ?? ''}
