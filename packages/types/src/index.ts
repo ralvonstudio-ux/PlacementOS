@@ -1246,24 +1246,35 @@ export interface ResumeLinks {
   portfolio?: string;
 }
 
+export interface ResumeCertificationEntry {
+  name: string;
+  issuer?: string;
+  year?: string;
+  link?: string;
+}
+
 export interface CandidateProfile {
   _id: string;
   instituteId: string;
   candidateId: string;
   headline?: string;
   summary?: string;
+  phone?: string;
+  location?: string;
   education: ResumeEducationEntry[];
   experience: ResumeExperienceEntry[];
   projects: ResumeProjectEntry[];
   skills: string[];
+  certifications: ResumeCertificationEntry[];
   links: ResumeLinks;
   leetcodeUsername?: string;
   resumeFileUrl?: string;
+  resumeFileName?: string;
   createdAt: string;
   updatedAt: string;
 }
 
-export type SaveCandidateProfilePayload = Partial<Omit<CandidateProfile, '_id' | 'instituteId' | 'candidateId' | 'createdAt' | 'updatedAt' | 'resumeFileUrl'>>;
+export type SaveCandidateProfilePayload = Partial<Omit<CandidateProfile, '_id' | 'instituteId' | 'candidateId' | 'createdAt' | 'updatedAt' | 'resumeFileUrl' | 'resumeFileName'>>;
 
 export interface LeetCodeBadge {
   id: string;

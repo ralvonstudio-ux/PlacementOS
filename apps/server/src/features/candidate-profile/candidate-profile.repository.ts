@@ -14,10 +14,10 @@ export const candidateProfileRepository = {
     );
   },
 
-  async setResumeFileUrl(candidateId: string, instituteId: string, resumeFileUrl: string): Promise<ICandidateProfile> {
+  async setResumeFileUrl(candidateId: string, instituteId: string, resumeFileUrl: string, resumeFileName?: string): Promise<ICandidateProfile> {
     return CandidateProfile.findOneAndUpdate(
       { candidateId, instituteId },
-      { $set: { resumeFileUrl }, $setOnInsert: { candidateId, instituteId } },
+      { $set: { resumeFileUrl, resumeFileName }, $setOnInsert: { candidateId, instituteId } },
       { new: true, upsert: true }
     );
   },

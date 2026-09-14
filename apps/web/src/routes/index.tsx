@@ -1,5 +1,6 @@
-import { lazy } from 'react';
 import { createBrowserRouter, Navigate } from 'react-router-dom';
+import { lazyWithReload } from '@/lib/lazyWithReload';
+import { RouteErrorBoundary } from './RouteErrorBoundary';
 import { AppLayout } from '@/layouts/AppLayout';
 import { AuthProvider } from '@/features/auth/components/AuthProvider';
 import { ProtectedRoute } from '@/features/auth/components/ProtectedRoute';
@@ -12,64 +13,64 @@ import { useAuth } from '@/features/auth/hooks/useAuth';
 import { getHomePathForRole } from '@/features/auth/utils/roleHome';
 
 // ── Faculty pages ──────────────────────────────────────────────────────────
-const FacultyDashboardPage = lazy(() => import('@/features/faculty-workspace/pages/FacultyDashboardPage').then((m) => ({ default: m.FacultyDashboardPage })));
-const FacultyBatchesPage = lazy(() => import('@/features/faculty-workspace/pages/FacultyBatchesPage').then((m) => ({ default: m.FacultyBatchesPage })));
-const FacultyAttendancePage = lazy(() => import('@/features/attendance/pages/FacultyAttendancePage').then((m) => ({ default: m.FacultyAttendancePage })));
-const BatchAttendancePage = lazy(() => import('@/features/attendance/pages/BatchAttendancePage').then((m) => ({ default: m.BatchAttendancePage })));
-const BatchRosterPage = lazy(() => import('@/features/attendance/pages/BatchRosterPage').then((m) => ({ default: m.BatchRosterPage })));
-const AcademicPlanPage = lazy(() => import('@/features/academic-plan/pages/AcademicPlanPage').then((m) => ({ default: m.AcademicPlanPage })));
-const MyLeaveRequestsPage = lazy(() => import('@/features/leave-requests/pages/MyLeaveRequestsPage').then((m) => ({ default: m.MyLeaveRequestsPage })));
-const QuestionBankLandingPage = lazy(() => import('@/features/question-bank/pages/QuestionBankLandingPage').then((m) => ({ default: m.QuestionBankLandingPage })));
-const QuestionCapturePage = lazy(() => import('@/features/question-bank/pages/QuestionCapturePage').then((m) => ({ default: m.QuestionCapturePage })));
-const PaperGeneratorPage = lazy(() => import('@/features/question-bank/pages/PaperGeneratorPage').then((m) => ({ default: m.PaperGeneratorPage })));
-const PaperPreviewPage = lazy(() => import('@/features/question-bank/pages/PaperPreviewPage').then((m) => ({ default: m.PaperPreviewPage })));
-const PapersListPage = lazy(() => import('@/features/question-bank/pages/PapersListPage').then((m) => ({ default: m.PapersListPage })));
-const WorksheetsPage = lazy(() => import('@/features/worksheet-generator/pages/WorksheetsPage').then((m) => ({ default: m.WorksheetsPage })));
-const FacultyProfilePage = lazy(() => import('@/features/faculty-workspace/pages/FacultyProfilePage').then((m) => ({ default: m.FacultyProfilePage })));
-const FacultyTestsPage = lazy(() => import('@/features/tests/pages/TpoTestsPage').then((m) => ({ default: m.TpoTestsPage })));
-const FacultyTestBuilderPage = lazy(() => import('@/features/tests/pages/TestBuilderPage').then((m) => ({ default: m.TestBuilderPage })));
-const FacultyTestReviewPage = lazy(() => import('@/features/tests/pages/TestReviewPage').then((m) => ({ default: m.TestReviewPage })));
+const FacultyDashboardPage = lazyWithReload(() => import('@/features/faculty-workspace/pages/FacultyDashboardPage').then((m) => ({ default: m.FacultyDashboardPage })), 'FacultyDashboardPage');
+const FacultyBatchesPage = lazyWithReload(() => import('@/features/faculty-workspace/pages/FacultyBatchesPage').then((m) => ({ default: m.FacultyBatchesPage })), 'FacultyBatchesPage');
+const FacultyAttendancePage = lazyWithReload(() => import('@/features/attendance/pages/FacultyAttendancePage').then((m) => ({ default: m.FacultyAttendancePage })), 'FacultyAttendancePage');
+const BatchAttendancePage = lazyWithReload(() => import('@/features/attendance/pages/BatchAttendancePage').then((m) => ({ default: m.BatchAttendancePage })), 'BatchAttendancePage');
+const BatchRosterPage = lazyWithReload(() => import('@/features/attendance/pages/BatchRosterPage').then((m) => ({ default: m.BatchRosterPage })), 'BatchRosterPage');
+const AcademicPlanPage = lazyWithReload(() => import('@/features/academic-plan/pages/AcademicPlanPage').then((m) => ({ default: m.AcademicPlanPage })), 'AcademicPlanPage');
+const MyLeaveRequestsPage = lazyWithReload(() => import('@/features/leave-requests/pages/MyLeaveRequestsPage').then((m) => ({ default: m.MyLeaveRequestsPage })), 'MyLeaveRequestsPage');
+const QuestionBankLandingPage = lazyWithReload(() => import('@/features/question-bank/pages/QuestionBankLandingPage').then((m) => ({ default: m.QuestionBankLandingPage })), 'QuestionBankLandingPage');
+const QuestionCapturePage = lazyWithReload(() => import('@/features/question-bank/pages/QuestionCapturePage').then((m) => ({ default: m.QuestionCapturePage })), 'QuestionCapturePage');
+const PaperGeneratorPage = lazyWithReload(() => import('@/features/question-bank/pages/PaperGeneratorPage').then((m) => ({ default: m.PaperGeneratorPage })), 'PaperGeneratorPage');
+const PaperPreviewPage = lazyWithReload(() => import('@/features/question-bank/pages/PaperPreviewPage').then((m) => ({ default: m.PaperPreviewPage })), 'PaperPreviewPage');
+const PapersListPage = lazyWithReload(() => import('@/features/question-bank/pages/PapersListPage').then((m) => ({ default: m.PapersListPage })), 'PapersListPage');
+const WorksheetsPage = lazyWithReload(() => import('@/features/worksheet-generator/pages/WorksheetsPage').then((m) => ({ default: m.WorksheetsPage })), 'WorksheetsPage');
+const FacultyProfilePage = lazyWithReload(() => import('@/features/faculty-workspace/pages/FacultyProfilePage').then((m) => ({ default: m.FacultyProfilePage })), 'FacultyProfilePage');
+const FacultyTestsPage = lazyWithReload(() => import('@/features/tests/pages/TpoTestsPage').then((m) => ({ default: m.TpoTestsPage })), 'TpoTestsPage');
+const FacultyTestBuilderPage = lazyWithReload(() => import('@/features/tests/pages/TestBuilderPage').then((m) => ({ default: m.TestBuilderPage })), 'TestBuilderPage');
+const FacultyTestReviewPage = lazyWithReload(() => import('@/features/tests/pages/TestReviewPage').then((m) => ({ default: m.TestReviewPage })), 'TestReviewPage');
 
 // ── Admin pages ────────────────────────────────────────────────────────────
-const AdminDashboardPage = lazy(() => import('@/features/admin/pages/AdminDashboardPage').then((m) => ({ default: m.AdminDashboardPage })));
-const AdminFacultyPage = lazy(() => import('@/features/admin/pages/AdminFacultyPage').then((m) => ({ default: m.AdminFacultyPage })));
+const AdminDashboardPage = lazyWithReload(() => import('@/features/admin/pages/AdminDashboardPage').then((m) => ({ default: m.AdminDashboardPage })), 'AdminDashboardPage');
+const AdminFacultyPage = lazyWithReload(() => import('@/features/admin/pages/AdminFacultyPage').then((m) => ({ default: m.AdminFacultyPage })), 'AdminFacultyPage');
 
 // ── Timetable pages (training schedule) ─────────────────────────────────────
-const BatchTimetablePage = lazy(() => import('@/features/training-schedule/pages/BatchTimetablePage').then((m) => ({ default: m.BatchTimetablePage })));
-const PeriodSetupPage = lazy(() => import('@/features/training-schedule/pages/PeriodSetupPage').then((m) => ({ default: m.PeriodSetupPage })));
-const MasterGridPage = lazy(() => import('@/features/training-schedule/pages/MasterGridPage').then((m) => ({ default: m.MasterGridPage })));
-const SubstituteWorkspace = lazy(() => import('@/features/training-schedule/pages/SubstituteWorkspace').then((m) => ({ default: m.SubstituteWorkspace })));
+const BatchTimetablePage = lazyWithReload(() => import('@/features/training-schedule/pages/BatchTimetablePage').then((m) => ({ default: m.BatchTimetablePage })), 'BatchTimetablePage');
+const PeriodSetupPage = lazyWithReload(() => import('@/features/training-schedule/pages/PeriodSetupPage').then((m) => ({ default: m.PeriodSetupPage })), 'PeriodSetupPage');
+const MasterGridPage = lazyWithReload(() => import('@/features/training-schedule/pages/MasterGridPage').then((m) => ({ default: m.MasterGridPage })), 'MasterGridPage');
+const SubstituteWorkspace = lazyWithReload(() => import('@/features/training-schedule/pages/SubstituteWorkspace').then((m) => ({ default: m.SubstituteWorkspace })), 'SubstituteWorkspace');
 
 // ── Import pages (bulk CSV/Excel upload) ────────────────────────────────────
-const ImportDashboard = lazy(() => import('@/features/import/pages/ImportDashboard').then((m) => ({ default: m.ImportDashboard })));
-const UploadCenter = lazy(() => import('@/features/import/pages/UploadCenter').then((m) => ({ default: m.UploadCenter })));
-const ImportSessionDetail = lazy(() => import('@/features/import/pages/ImportSessionDetail').then((m) => ({ default: m.ImportSessionDetail })));
-const ImportHistory = lazy(() => import('@/features/import/pages/ImportHistory').then((m) => ({ default: m.ImportHistory })));
+const ImportDashboard = lazyWithReload(() => import('@/features/import/pages/ImportDashboard').then((m) => ({ default: m.ImportDashboard })), 'ImportDashboard');
+const UploadCenter = lazyWithReload(() => import('@/features/import/pages/UploadCenter').then((m) => ({ default: m.UploadCenter })), 'UploadCenter');
+const ImportSessionDetail = lazyWithReload(() => import('@/features/import/pages/ImportSessionDetail').then((m) => ({ default: m.ImportSessionDetail })), 'ImportSessionDetail');
+const ImportHistory = lazyWithReload(() => import('@/features/import/pages/ImportHistory').then((m) => ({ default: m.ImportHistory })), 'ImportHistory');
 
 // ── TPO pages ──────────────────────────────────────────────────────────────
-const TpoDashboardPage = lazy(() => import('@/features/tpo/pages/TpoDashboardPage').then((m) => ({ default: m.TpoDashboardPage })));
-const TpoAttendancePage = lazy(() => import('@/features/tpo/pages/TpoAttendancePage').then((m) => ({ default: m.TpoAttendancePage })));
-const TpoInsightsPage = lazy(() => import('@/features/tpo/pages/TpoInsightsPage').then((m) => ({ default: m.TpoInsightsPage })));
-const TpoFacultyPage = lazy(() => import('@/features/tpo/pages/TpoFacultyPage').then((m) => ({ default: m.TpoFacultyPage })));
-const TpoLeaveApprovalsPage = lazy(() => import('@/features/leave-requests/pages/TpoLeaveApprovalsPage').then((m) => ({ default: m.TpoLeaveApprovalsPage })));
-const TpoQuestionBankOverviewPage = lazy(() => import('@/features/question-bank/pages/TpoQuestionBankOverviewPage').then((m) => ({ default: m.TpoQuestionBankOverviewPage })));
-const TpoCandidatesPage = lazy(() => import('@/features/candidates/pages/TpoCandidatesPage').then((m) => ({ default: m.TpoCandidatesPage })));
-const TpoPracticeLibraryPage = lazy(() => import('@/features/practice/pages/TpoPracticeLibraryPage').then((m) => ({ default: m.TpoPracticeLibraryPage })));
-const TpoTestsPage = lazy(() => import('@/features/tests/pages/TpoTestsPage').then((m) => ({ default: m.TpoTestsPage })));
-const TestBuilderPage = lazy(() => import('@/features/tests/pages/TestBuilderPage').then((m) => ({ default: m.TestBuilderPage })));
-const TestReviewPage = lazy(() => import('@/features/tests/pages/TestReviewPage').then((m) => ({ default: m.TestReviewPage })));
+const TpoDashboardPage = lazyWithReload(() => import('@/features/tpo/pages/TpoDashboardPage').then((m) => ({ default: m.TpoDashboardPage })), 'TpoDashboardPage');
+const TpoAttendancePage = lazyWithReload(() => import('@/features/tpo/pages/TpoAttendancePage').then((m) => ({ default: m.TpoAttendancePage })), 'TpoAttendancePage');
+const TpoInsightsPage = lazyWithReload(() => import('@/features/tpo/pages/TpoInsightsPage').then((m) => ({ default: m.TpoInsightsPage })), 'TpoInsightsPage');
+const TpoFacultyPage = lazyWithReload(() => import('@/features/tpo/pages/TpoFacultyPage').then((m) => ({ default: m.TpoFacultyPage })), 'TpoFacultyPage');
+const TpoLeaveApprovalsPage = lazyWithReload(() => import('@/features/leave-requests/pages/TpoLeaveApprovalsPage').then((m) => ({ default: m.TpoLeaveApprovalsPage })), 'TpoLeaveApprovalsPage');
+const TpoQuestionBankOverviewPage = lazyWithReload(() => import('@/features/question-bank/pages/TpoQuestionBankOverviewPage').then((m) => ({ default: m.TpoQuestionBankOverviewPage })), 'TpoQuestionBankOverviewPage');
+const TpoCandidatesPage = lazyWithReload(() => import('@/features/candidates/pages/TpoCandidatesPage').then((m) => ({ default: m.TpoCandidatesPage })), 'TpoCandidatesPage');
+const TpoPracticeLibraryPage = lazyWithReload(() => import('@/features/practice/pages/TpoPracticeLibraryPage').then((m) => ({ default: m.TpoPracticeLibraryPage })), 'TpoPracticeLibraryPage');
+const TpoTestsPage = lazyWithReload(() => import('@/features/tests/pages/TpoTestsPage').then((m) => ({ default: m.TpoTestsPage })), 'TpoTestsPage');
+const TestBuilderPage = lazyWithReload(() => import('@/features/tests/pages/TestBuilderPage').then((m) => ({ default: m.TestBuilderPage })), 'TestBuilderPage');
+const TestReviewPage = lazyWithReload(() => import('@/features/tests/pages/TestReviewPage').then((m) => ({ default: m.TestReviewPage })), 'TestReviewPage');
 
 // ── Candidate pages ──────────────────────────────────────────────────────────
-const CandidateDashboardPage = lazy(() => import('@/features/candidate-profile/pages/CandidateDashboardPage').then((m) => ({ default: m.CandidateDashboardPage })));
-const ResumeBuilderPage = lazy(() => import('@/features/candidate-profile/pages/ResumeBuilderPage').then((m) => ({ default: m.ResumeBuilderPage })));
-const PracticeBrowsePage = lazy(() => import('@/features/practice/pages/PracticeBrowsePage').then((m) => ({ default: m.PracticeBrowsePage })));
-const CandidatePracticeSheetsPage = lazy(() => import('@/features/practice/pages/CandidatePracticeSheetsPage').then((m) => ({ default: m.CandidatePracticeSheetsPage })));
-const TestListPage = lazy(() => import('@/features/tests/pages/TestListPage').then((m) => ({ default: m.TestListPage })));
-const TestTakingPage = lazy(() => import('@/features/tests/pages/TestTakingPage').then((m) => ({ default: m.TestTakingPage })));
+const CandidateDashboardPage = lazyWithReload(() => import('@/features/candidate-profile/pages/CandidateDashboardPage').then((m) => ({ default: m.CandidateDashboardPage })), 'CandidateDashboardPage');
+const ResumeBuilderPage = lazyWithReload(() => import('@/features/candidate-profile/pages/ResumeBuilderPage').then((m) => ({ default: m.ResumeBuilderPage })), 'ResumeBuilderPage');
+const PracticeBrowsePage = lazyWithReload(() => import('@/features/practice/pages/PracticeBrowsePage').then((m) => ({ default: m.PracticeBrowsePage })), 'PracticeBrowsePage');
+const CandidatePracticeSheetsPage = lazyWithReload(() => import('@/features/practice/pages/CandidatePracticeSheetsPage').then((m) => ({ default: m.CandidatePracticeSheetsPage })), 'CandidatePracticeSheetsPage');
+const TestListPage = lazyWithReload(() => import('@/features/tests/pages/TestListPage').then((m) => ({ default: m.TestListPage })), 'TestListPage');
+const TestTakingPage = lazyWithReload(() => import('@/features/tests/pages/TestTakingPage').then((m) => ({ default: m.TestTakingPage })), 'TestTakingPage');
 
 // ── Shared ─────────────────────────────────────────────────────────────────
-const SettingsPage = lazy(() => import('@/features/auth/pages/SettingsPage').then((m) => ({ default: m.SettingsPage })));
-const MessagesPage = lazy(() => import('@/features/messages/pages/MessagesPage').then((m) => ({ default: m.MessagesPage })));
+const SettingsPage = lazyWithReload(() => import('@/features/auth/pages/SettingsPage').then((m) => ({ default: m.SettingsPage })), 'SettingsPage');
+const MessagesPage = lazyWithReload(() => import('@/features/messages/pages/MessagesPage').then((m) => ({ default: m.MessagesPage })), 'MessagesPage');
 
 /** Wraps every route in AuthProvider — needs to be inside the router (it calls useNavigate). */
 function RootLayout() {
@@ -90,6 +91,7 @@ function RoleHomeRedirect() {
 export const router = createBrowserRouter([
   {
     element: <RootLayout />,
+    errorElement: <RouteErrorBoundary />,
     children: [
       { path: '/login', element: <LoginPage /> },
       { path: '/forbidden', element: <Forbidden /> },

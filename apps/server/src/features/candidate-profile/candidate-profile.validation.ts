@@ -27,13 +27,23 @@ const linksSchema = z.object({
   portfolio: z.string().trim().optional(),
 });
 
+const certificationSchema = z.object({
+  name: z.string().min(1).trim(),
+  issuer: z.string().trim().optional(),
+  year: z.string().trim().optional(),
+  link: z.string().trim().optional(),
+});
+
 export const saveCandidateProfileSchema = z.object({
   headline: z.string().trim().max(150).optional(),
   summary: z.string().trim().max(1000).optional(),
+  phone: z.string().trim().max(30).optional(),
+  location: z.string().trim().max(150).optional(),
   education: z.array(educationSchema).optional(),
   experience: z.array(experienceSchema).optional(),
   projects: z.array(projectSchema).optional(),
   skills: z.array(z.string().trim()).optional(),
+  certifications: z.array(certificationSchema).optional(),
   links: linksSchema.optional(),
   leetcodeUsername: z.string().trim().optional(),
 });

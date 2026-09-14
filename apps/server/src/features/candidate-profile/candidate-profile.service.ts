@@ -6,6 +6,7 @@ import { AuthContext } from '../../lib/auth-context';
 import { ValidationError } from '../../middlewares/errorHandler';
 import { logger } from '../../lib/logger';
 import { r2Storage } from '../../lib/r2-storage';
+import { fileToDataUri } from '../../lib/image-upload';
 import { resolveCandidateId } from '../candidates/candidate.service';
 import type { CandidateProfile as CandidateProfileApiShape, LeetCodeBadge, LeetCodeStats } from '@placementos/types';
 
@@ -15,13 +16,17 @@ const toApiShape = (p: ICandidateProfile): CandidateProfileApiShape => ({
   candidateId: p.candidateId,
   headline: p.headline,
   summary: p.summary,
+  phone: p.phone,
+  location: p.location,
   education: p.education,
   experience: p.experience,
   projects: p.projects,
   skills: p.skills,
+  certifications: p.certifications ?? [],
   links: p.links,
   leetcodeUsername: p.leetcodeUsername,
   resumeFileUrl: p.resumeFileUrl,
+  resumeFileName: p.resumeFileName,
   createdAt: new Date(p.createdAt).toISOString(),
   updatedAt: new Date(p.updatedAt).toISOString(),
 });
@@ -76,13 +81,19 @@ export const candidateProfileService = {
     return toApiShape(profile);
   },
 
-  async uploadResume(file: { buffer: Buffer; mimetype: string }, ctx: AuthContext): Promise<CandidateProfileApiShape> {
-    if (!r2Storage.isConfigured()) {
-      throw new ValidationError('File storage is not configured on this server yet — resume upload is unavailable.');
-    }
+  async uploadResume(file: { buffer: Buffer; mimetype: string; originalname?: string }, ctx: AuthContext): Promise<CandidateProfileApiShape> {
     const candidateId = await resolveCandidateId(ctx);
-    const { url } = await r2Storage.uploadToR2(file.buffer, file.mimetype, 'resumes', ctx.instituteId);
-    const profile = await candidateProfileRepository.setResumeFileUrl(candidateId, ctx.instituteId, url);
+
+    // Cloudflare R2 is the intended long-term store, but until it's configured on this
+    // deployment we still want uploads to work — fall back to persisting the file inline on
+    // the profile document as a base64 data URI. The 5MB upload cap (documentUploadMiddleware)
+    // keeps the encoded size comfortably under MongoDB's 16MB document limit. Once R2 is
+    // configured, new uploads switch over automatically — no migration of existing rows needed.
+    const url = r2Storage.isConfigured()
+      ? (await r2Storage.uploadToR2(file.buffer, file.mimetype, 'resumes', ctx.instituteId)).url
+      : fileToDataUri(file as Express.Multer.File);
+
+    const profile = await candidateProfileRepository.setResumeFileUrl(candidateId, ctx.instituteId, url, file.originalname);
     return toApiShape(profile);
   },
 
