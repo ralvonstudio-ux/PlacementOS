@@ -2,12 +2,27 @@ import { useState, useMemo, useRef, useEffect } from 'react';
 import { motion, AnimatePresence, useMotionValue, useTransform, type PanInfo } from 'framer-motion';
 import {
   Check, X, Clock, CalendarOff, Search, Undo2,
-  SlidersHorizontal, Users, RotateCcw, Save,
+  SlidersHorizontal, Users, RotateCcw, Save, MessageCircle, Pencil,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import type { AttendanceStatus, Candidate } from '@placementos/types';
 import { useBulkMarkAttendance } from '../hooks/useAttendance';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+
+interface SubmittedResult {
+  presentCount: number;
+  absentCount: number;
+  absentCandidates: Candidate[];
+  submittedAt: Date;
+}
+
+function formatDateLong(d: Date): string {
+  return d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+}
+
+function formatTimeShort(d: Date): string {
+  return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }).toLowerCase();
+}
 
 interface Props {
   candidates: Candidate[];
@@ -271,6 +286,7 @@ export function SwipeAttendanceDeck({ candidates, batch, track, date, onSuccess,
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [restoredDraft, setRestoredDraft] = useState(false);
+  const [submittedResult, setSubmittedResult] = useState<SubmittedResult | null>(null);
   const historyRef = useRef<{ id: string; prev: AttendanceStatus | undefined }[]>([]);
   const key = draftKey(batch, track, date);
   const hydratedRef = useRef(false);
@@ -375,11 +391,107 @@ export function SwipeAttendanceDeck({ candidates, batch, track, date, onSuccess,
     });
     try { localStorage.removeItem(key); } catch { /* best effort */ }
     setConfirmOpen(false);
-    onSuccess?.();
+    const absentCandidates = candidates.filter((c) => statuses[c._id] === 'absent');
+    setSubmittedResult({
+      presentCount: candidates.filter((c) => (statuses[c._id] ?? 'present') === 'present').length,
+      absentCount: absentCandidates.length,
+      absentCandidates,
+      submittedAt: new Date(),
+    });
+  }
+
+  function sendWhatsAppReminders() {
+    if (!submittedResult) return;
+    const withPhone = submittedResult.absentCandidates.filter((c) => c.phone);
+    for (const c of withPhone) {
+      const digits = c.phone!.replace(/[^\d]/g, '');
+      const message = encodeURIComponent(`Hi ${c.fullName}, you were marked absent for ${track} (${batch}) today. Please reach out if this isn't correct.`);
+      window.open(`https://wa.me/${digits}?text=${message}`, '_blank', 'noopener,noreferrer');
+    }
   }
 
   if (candidates.length === 0) {
     return <div className="text-center py-10 text-gray-500">No candidates found for {batch} – {track}.</div>;
+  }
+
+  if (submittedResult) {
+    return (
+      <div className="flex-1 min-h-0 overflow-y-auto flex flex-col items-center text-center px-1 py-4">
+        <div className="relative w-24 h-24 mb-5 shrink-0">
+          <span className="absolute inset-0 rounded-full bg-emerald-400 blur-2xl opacity-40" />
+          <div className="relative w-24 h-24 rounded-full bg-emerald-500 flex items-center justify-center shadow-xl shadow-emerald-500/40">
+            <div className="w-14 h-14 rounded-full border-[3px] border-white flex items-center justify-center">
+              <Check className="w-7 h-7 text-white" strokeWidth={3} />
+            </div>
+          </div>
+        </div>
+
+        <h2 className="text-2xl font-bold text-gray-900">Attendance submitted</h2>
+        <p className="text-lg text-gray-400 -mt-0.5">successfully!</p>
+
+        <div className="w-full max-w-sm bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mt-6 text-left">
+          <h3 className="text-base font-bold text-gray-900">Class {batch} – {track}</h3>
+          <p className="text-sm text-gray-500 mt-1">{formatDateLong(submittedResult.submittedAt)}</p>
+          <p className="text-xs text-gray-400">{formatTimeShort(submittedResult.submittedAt)}</p>
+          <div className="flex gap-10 mt-4">
+            <div>
+              <p className="text-2xl font-bold text-emerald-600 leading-none">{submittedResult.presentCount}</p>
+              <p className="text-xs text-gray-400 mt-1">Present</p>
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-red-600 leading-none">{submittedResult.absentCount}</p>
+              <p className="text-xs text-gray-400 mt-1">Absent</p>
+            </div>
+          </div>
+        </div>
+
+        {submittedResult.absentCount > 0 && (
+          <div className="w-full max-w-sm bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mt-4 text-left">
+            <h3 className="text-base font-bold text-gray-900">Absent Today ({submittedResult.absentCount})</h3>
+            <p className="text-sm text-gray-400 mt-1 mb-3">{formatDateLong(submittedResult.submittedAt)}</p>
+            <div className="space-y-2 mb-4">
+              {submittedResult.absentCandidates.map((c) => (
+                <div key={c._id} className="flex items-center justify-between">
+                  <span className="text-sm font-semibold text-gray-900">{c.fullName}</span>
+                  <span className="text-xs text-gray-400">{c.phone || 'No phone'}</span>
+                </div>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={sendWhatsAppReminders}
+              className="w-full h-11 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-bold flex items-center justify-center gap-2 transition-colors"
+            >
+              <MessageCircle className="w-4 h-4" /> Send WhatsApp Reminder ({submittedResult.absentCount})
+            </button>
+          </div>
+        )}
+
+        <div className="w-full max-w-sm mt-6 space-y-3">
+          <button
+            type="button"
+            onClick={() => navigate(`/faculty/attendance/${batch}/${track}/roster`)}
+            className="w-full h-12 rounded-xl bg-violet-700 hover:bg-violet-800 text-white text-sm font-bold transition-colors"
+          >
+            View Students
+          </button>
+          <button
+            type="button"
+            onClick={() => setSubmittedResult(null)}
+            className="w-full h-12 rounded-xl border border-gray-200 text-gray-700 text-sm font-bold flex items-center justify-center gap-2 hover:bg-gray-50 transition-colors"
+          >
+            <Pencil className="w-4 h-4" /> Edit Attendance
+          </button>
+          <button
+            type="button"
+            onClick={() => onSuccess?.()}
+            className="w-full text-center text-violet-700 text-sm font-bold py-2 hover:text-violet-800 transition-colors"
+          >
+            Back to Dashboard
+          </button>
+        </div>
+      </div>
+    );
   }
 
   const FILTER_OPTIONS: { value: StatusFilter; label: string }[] = [
