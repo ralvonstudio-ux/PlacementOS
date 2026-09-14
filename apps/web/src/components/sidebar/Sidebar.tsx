@@ -19,7 +19,6 @@ import {
   Building2,
   BookMarked,
   ShieldCheck,
-  Code2,
   ClipboardCheck,
   CalendarClock,
   Grid3x3,
@@ -100,7 +99,6 @@ const NAV_ITEMS_CANDIDATE = [
   { label: 'Aptitude & Reasoning', icon: Calculator, path: '/candidate/practice/aptitude', end: false },
   { label: 'Company Questions', icon: Building2, path: '/candidate/practice/company', end: false },
   { label: 'Practice Sheets', icon: BookMarked, path: '/candidate/practice-sheets', end: false },
-  { label: 'LeetCode Profile', icon: Code2, path: '/candidate/leetcode', end: false },
   { label: 'Tests', icon: ShieldCheck, path: '/candidate/tests', end: false },
 ] as const;
 
