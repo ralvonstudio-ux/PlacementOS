@@ -72,7 +72,7 @@ export const testController = {
   async start(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const ctx = buildAuthContext(req.user!, req.ip ?? undefined);
-      const result = await testService.start(req.params.id, ctx);
+      const result = await testService.start(req.params.id, req.body, ctx);
       sendSuccess(res, result, 'Test started');
     } catch (err) { next(err); }
   },

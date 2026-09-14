@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { testsApi } from '../api/tests.api';
-import type { CreateTestPayload, SubmitAnswerPayload, LogViolationPayload } from '@placementos/types';
+import type { CreateTestPayload, StartTestPayload, SubmitAnswerPayload, LogViolationPayload } from '@placementos/types';
 
 export const testKeys = {
   all: ['tests'] as const,
@@ -50,7 +50,8 @@ export const useTestReview = (id: string | null) =>
 export const useMyTests = () =>
   useQuery({ queryKey: testKeys.mine(), queryFn: testsApi.listMine });
 
-export const useStartTest = () => useMutation({ mutationFn: (testId: string) => testsApi.start(testId) });
+export const useStartTest = () =>
+  useMutation({ mutationFn: ({ testId, payload }: { testId: string; payload: StartTestPayload }) => testsApi.start(testId, payload) });
 
 export const useSubmitTestAnswer = () =>
   useMutation({ mutationFn: ({ attemptId, payload }: { attemptId: string; payload: SubmitAnswerPayload }) => testsApi.submitAnswer(attemptId, payload) });

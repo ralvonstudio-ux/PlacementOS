@@ -1513,6 +1513,8 @@ export interface Test {
   /** Number of proctoring violations tolerated before an attempt auto-submits. */
   violationLimit: number;
   status: TestStatus;
+  /** Optional — the test can't be started before this time, even once published. */
+  scheduledAt?: string;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
@@ -1525,6 +1527,7 @@ export interface CreateTestPayload {
   questions: TestQuestionSnapshot[];
   durationMinutes: number;
   violationLimit: number;
+  scheduledAt?: string;
 }
 
 /** What a candidate sees in their test list / when starting one. */
@@ -1537,8 +1540,11 @@ export interface TestForCandidate {
   durationMinutes: number;
   violationLimit: number;
   questionCount: number;
+  scheduledAt?: string;
   /** Set once the candidate has an attempt in progress or submitted for this test. */
   attemptStatus?: TestAttemptStatus;
+  /** Set once the candidate's attempt has been scored (i.e. submitted). */
+  score?: number;
 }
 
 export type TestAttemptStatus = 'in_progress' | 'submitted';
@@ -1610,4 +1616,23 @@ export interface TestAttemptReview {
   attempt: TestAttempt;
   candidateName: string;
   test: Test;
+}
+
+export interface StartTestPayload {
+  /** The one-time code issued in the candidate's notification when the test opened. */
+  accessCode: string;
+}
+
+// ── Notifications ────────────────────────────────────────────────────────────
+
+export type NotificationType = 'test_access_code';
+
+export interface Notification {
+  _id: string;
+  type: NotificationType;
+  title: string;
+  body: string;
+  relatedTestId?: string;
+  readAt?: string;
+  createdAt: string;
 }

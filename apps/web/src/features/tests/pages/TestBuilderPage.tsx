@@ -22,6 +22,7 @@ export function TestBuilderPage() {
   const [track, setTrack] = useState('');
   const [durationMinutes, setDurationMinutes] = useState(30);
   const [violationLimit, setViolationLimit] = useState(3);
+  const [scheduledAt, setScheduledAt] = useState('');
   const [questions, setQuestions] = useState<TestQuestionSnapshot[]>([emptyQuestion()]);
   const [error, setError] = useState('');
 
@@ -42,6 +43,7 @@ export function TestBuilderPage() {
         questions: questions.map((q) => ({ ...q, options: q.questionType === 'mcq' ? q.options?.filter((o) => o.trim()) : undefined })),
         durationMinutes,
         violationLimit,
+        scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : undefined,
       });
       navigate(`/tpo/tests/${test._id}/review`);
     } catch (err) {
@@ -68,6 +70,10 @@ export function TestBuilderPage() {
             <label className="block text-xs text-gray-500 mb-1">Violation limit before auto-submit</label>
             <input type="number" min={1} value={violationLimit} onChange={(e) => setViolationLimit(Number(e.target.value))} className={inputCls} />
           </div>
+        </div>
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">Opens at (optional — leave blank to allow starting as soon as it's published)</label>
+          <input type="datetime-local" value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} className={inputCls} />
         </div>
       </div>
 

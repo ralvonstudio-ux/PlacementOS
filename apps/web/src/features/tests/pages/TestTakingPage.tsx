@@ -88,6 +88,7 @@ export function TestTakingPage() {
   const [violationBanner, setViolationBanner] = useState<{ type: TestViolationType; count: number; limit: number } | null>(null);
   const [cameraError, setCameraError] = useState('');
   const [screenShareError, setScreenShareError] = useState('');
+  const [accessCode, setAccessCode] = useState('');
   const [error, setError] = useState('');
   const [finalScore, setFinalScore] = useState<number | undefined>();
 
@@ -248,6 +249,11 @@ export function TestTakingPage() {
     setCameraError('');
     setScreenShareError('');
 
+    if (!accessCode.trim()) {
+      setError('Enter the access code from your notification to continue.');
+      return;
+    }
+
     try {
       await document.documentElement.requestFullscreen();
     } catch {
@@ -281,7 +287,7 @@ export function TestTakingPage() {
     }
 
     try {
-      const result = await startTest.mutateAsync(testId);
+      const result = await startTest.mutateAsync({ testId, payload: { accessCode: accessCode.trim() } });
       setSession(result);
       attemptIdRef.current = result.attempt._id;
       const existingAnswers: Record<number, { selectedOption?: string; answerText?: string }> = {};
@@ -381,6 +387,17 @@ export function TestTakingPage() {
               </li>
             ))}
           </ul>
+
+          <div className="mb-4">
+            <label className="block text-xs font-medium text-zinc-400 mb-1.5">Access code (from your notification)</label>
+            <input
+              value={accessCode}
+              onChange={(e) => setAccessCode(e.target.value)}
+              placeholder="e.g. K7XPQ2"
+              autoCapitalize="characters"
+              className="w-full h-11 px-3.5 rounded-xl bg-[#0B0620] border border-white/10 text-sm text-white tracking-widest placeholder-zinc-600 focus:outline-none focus:border-violet-500"
+            />
+          </div>
 
           {(error || cameraError || screenShareError) && (
             <div className="mb-4 rounded-xl bg-red-950/40 border border-red-900/30 px-4 py-3">

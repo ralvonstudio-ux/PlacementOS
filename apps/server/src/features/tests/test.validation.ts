@@ -20,9 +20,15 @@ export const createTestSchema = z.object({
   questions: z.array(testQuestionSchema).min(1, 'Add at least one question'),
   durationMinutes: z.number().int().min(1),
   violationLimit: z.number().int().min(1).default(3),
+  /** Optional — blocks `start` until this instant even once the test is published. */
+  scheduledAt: z.coerce.date().optional(),
 });
 
 export const updateTestSchema = createTestSchema.partial();
+
+export const startTestSchema = z.object({
+  accessCode: z.string().trim().min(1, 'Enter the access code from your notification'),
+});
 
 export const submitAnswerSchema = z.object({
   questionIndex: z.number().int().min(0),
@@ -47,5 +53,6 @@ export const logViolationSchema = z.object({
 
 export type CreateTestInput = z.infer<typeof createTestSchema>;
 export type UpdateTestInput = z.infer<typeof updateTestSchema>;
+export type StartTestInput = z.infer<typeof startTestSchema>;
 export type SubmitAnswerInput = z.infer<typeof submitAnswerSchema>;
 export type LogViolationInput = z.infer<typeof logViolationSchema>;

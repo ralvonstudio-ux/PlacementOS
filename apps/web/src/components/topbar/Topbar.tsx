@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { Menu, ChevronDown, Clock, Settings, LogOut } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/features/auth/hooks/useAuth';
+import { NotificationBell } from '@/features/notifications/components/NotificationBell';
 
 const WORKSPACE_LABELS: Record<string, string> = {
   '/faculty': 'Trainer Workspace',
@@ -138,6 +139,8 @@ export const Topbar = ({ onMenuToggle }: TopbarProps) => {
             </svg>
             {date}
           </span>
+
+          <NotificationBell />
 
           <div className="relative">
             <button

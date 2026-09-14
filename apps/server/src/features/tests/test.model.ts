@@ -21,6 +21,14 @@ export interface ITest extends Document {
   durationMinutes: number;
   violationLimit: number;
   status: TestStatus;
+  /** Optional — the test can't be started before this time, even once published. */
+  scheduledAt?: Date;
+  /** bcrypt hash of the one-time access code issued (via notification) when the test opens.
+   *  Never store or transmit the plaintext code — only this hash, compared at `start()`. */
+  accessCodeHash?: string;
+  /** Set the moment the access code is generated + notifications are sent — guards against
+   *  issuing (and notifying about) the code twice for the same test. */
+  accessCodeIssuedAt?: Date;
   createdBy: string;
   isDeleted: boolean;
   deletedAt?: Date;
@@ -50,6 +58,9 @@ const testSchema = new Schema<ITest>(
     durationMinutes: { type: Number, required: true, min: 1 },
     violationLimit: { type: Number, required: true, min: 1, default: 3 },
     status: { type: String, enum: ['draft', 'published', 'closed'], default: 'draft' },
+    scheduledAt: { type: Date },
+    accessCodeHash: { type: String },
+    accessCodeIssuedAt: { type: Date },
     createdBy: { type: String, required: true },
     isDeleted: { type: Boolean, default: false },
     deletedAt: { type: Date },

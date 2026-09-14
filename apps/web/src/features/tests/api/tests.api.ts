@@ -5,6 +5,7 @@ import type {
   CreateTestPayload,
   TestForCandidate,
   StartTestAttemptResult,
+  StartTestPayload,
   TestAttempt,
   SubmitAnswerPayload,
   LogViolationPayload,
@@ -65,9 +66,9 @@ export const testsApi = {
     } catch (err) { throw new Error(extractErrorMessage(err)); }
   },
 
-  async start(testId: string): Promise<StartTestAttemptResult> {
+  async start(testId: string, payload: StartTestPayload): Promise<StartTestAttemptResult> {
     try {
-      const res = await apiClient.post<ApiResponse<StartTestAttemptResult>>(`${BASE}/${testId}/start`);
+      const res = await apiClient.post<ApiResponse<StartTestAttemptResult>>(`${BASE}/${testId}/start`, payload);
       return res.data.data!;
     } catch (err) { throw new Error(extractErrorMessage(err)); }
   },

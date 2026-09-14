@@ -42,6 +42,7 @@ export function TpoTestsPage() {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-gray-900">{t.title}</p>
                   <p className="text-xs text-gray-500 mt-0.5">{t.batch}{t.track ? ` · ${t.track}` : ''} · {t.questions.length} questions · {t.totalMarks} marks · {t.durationMinutes} min · violation limit {t.violationLimit}</p>
+                  {t.scheduledAt && <p className="text-xs text-violet-600 mt-0.5">Opens {new Date(t.scheduledAt).toLocaleString()}</p>}
                 </div>
                 <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${STATUS_CLASSES[t.status]}`}>{t.status}</span>
                 <div className="flex items-center gap-2 shrink-0">
