@@ -78,7 +78,11 @@ export const ActionCard = ({
       onClick={onClick}
       disabled={disabled}
       className={cn(
-        'group relative flex flex-col bg-white rounded-2xl p-6 text-left w-full',
+        // Compact icon tile on phones (icon + label only); full description
+        // card from `sm` up — big cards ate too much vertical space stacked
+        // one-per-row on narrow screens.
+        'group relative flex flex-col items-center text-center gap-1.5 bg-white rounded-2xl p-3 w-full',
+        'sm:items-start sm:text-left sm:gap-0 sm:p-6',
         'border border-gray-100 shadow-sm',
         'transition-all duration-200',
         disabled
@@ -86,28 +90,39 @@ export const ActionCard = ({
           : 'hover:shadow-lg hover:-translate-y-0.5 cursor-pointer active:translate-y-0 active:shadow-md'
       )}
     >
+      {badge && (
+        <span
+          className={cn(
+            'sm:hidden absolute top-2 right-2 text-[9px] font-bold leading-none px-1.5 py-1 rounded-full',
+            colors.badgeBg
+          )}
+        >
+          {badge}
+        </span>
+      )}
+
       {/* Icon */}
       <div
         className={cn(
-          'w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0',
+          'w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0',
           colors.iconBg
         )}
       >
-        <Icon className={cn('w-6 h-6', colors.iconColor)} strokeWidth={1.75} />
+        <Icon className={cn('w-5 h-5 sm:w-6 sm:h-6', colors.iconColor)} strokeWidth={1.75} />
       </div>
 
       {/* Content */}
-      <div className="mt-5 flex-1">
-        <h3 className="text-[17px] font-semibold text-gray-900 leading-tight">
+      <div className="sm:mt-5 sm:flex-1 w-full min-w-0">
+        <h3 className="text-xs sm:text-[17px] font-semibold text-gray-900 leading-tight line-clamp-2 sm:line-clamp-none">
           {title}
         </h3>
-        <p className="text-sm text-gray-500 mt-1 leading-relaxed">
+        <p className="hidden sm:block text-sm text-gray-500 mt-1 leading-relaxed">
           {description}
         </p>
       </div>
 
-      {/* Footer */}
-      <div className="mt-5 flex items-center">
+      {/* Footer — full badge + arrow, desktop only */}
+      <div className="hidden sm:flex mt-5 items-center w-full">
         {badge && (
           <span className={cn('text-xs font-medium px-2.5 py-1 rounded-lg', colors.badgeBg)}>
             {badge}

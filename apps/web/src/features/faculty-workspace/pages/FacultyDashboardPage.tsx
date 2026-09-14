@@ -64,7 +64,7 @@ export function FacultyDashboardPage() {
       </div>
 
       <SectionTitle>Quick Actions</SectionTitle>
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-3 gap-3 sm:gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <ActionCard
           icon={ClipboardCheck}
           title="My Batches"
