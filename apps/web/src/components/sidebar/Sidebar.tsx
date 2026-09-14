@@ -37,8 +37,7 @@ const NAV_ITEMS_FACULTY = [
   { label: 'My Dashboard', icon: LayoutDashboard, path: '/faculty', end: true },
   { label: 'Attendance', icon: ClipboardCheck, path: '/faculty/attendance', end: false },
   { label: 'My Batches', icon: BookOpen, path: '/faculty/batches', end: false },
-  { label: 'Academic Plan', icon: Sparkles, path: '/faculty/academic-plan', end: false },
-  { label: 'Training Plan', icon: CalendarClock, path: '/faculty/training-plan', end: false },
+  { label: 'Training Plan', icon: Sparkles, path: '/faculty/training-plan', end: false },
   { label: 'Question Bank', icon: Library, path: '/faculty/question-bank', end: false },
   { label: 'Worksheets', icon: FileCheck2, path: '/faculty/worksheets', end: false },
   { label: 'Tests', icon: ShieldCheck, path: '/faculty/tests', end: false },
@@ -57,7 +56,6 @@ const NAV_SECTION_TPO_APPROVALS = [
 ] as const;
 
 const NAV_SECTION_TPO_ACADEMICS = [
-  { label: 'Training Plan', icon: Sparkles, path: '/tpo/training-plan', end: false },
   { label: 'Question Bank Overview', icon: Library, path: '/tpo/question-bank-overview', end: false },
 ] as const;
 

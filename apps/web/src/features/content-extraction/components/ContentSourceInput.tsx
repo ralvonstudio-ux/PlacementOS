@@ -11,7 +11,7 @@ interface Props {
   label?: string;
 }
 
-/** Paste-or-upload content input shared by the Academic Plan, Worksheet, and Test
+/** Paste-or-upload content input shared by the Training Plan, Worksheet, and Test
  *  creation flows. Uploading a PDF/image transcribes it server-side and drops the
  *  result straight into the same editable textarea a pasted syllabus/content would
  *  use — so either path ends in one reviewable block of text. */

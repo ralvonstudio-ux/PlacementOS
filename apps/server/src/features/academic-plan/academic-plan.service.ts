@@ -105,7 +105,7 @@ const toApiShape = (plan: IAcademicPlan) => ({
 
 export const academicPlanService = {
   async generate(rawInput: unknown, ctx: AuthContext) {
-    if (ctx.role !== 'faculty') throw new ForbiddenError('Only faculty can generate their own academic plan');
+    if (ctx.role !== 'faculty') throw new ForbiddenError('Only faculty can generate their own training plan');
     const input = generateAcademicPlanSchema.parse(rawInput);
     await assertFacultyCanAccessQuestionBank(ctx, input.batch, input.track);
 
@@ -162,7 +162,7 @@ export const academicPlanService = {
     }
 
     const plan = await academicPlanRepository.upsert(ctx.instituteId, facultyId, input.batch, input.track, {
-      title: input.title?.trim() || `${input.track} — Academic Plan`,
+      title: input.title?.trim() || `${input.track} — Training Plan`,
       syllabusText: input.syllabusText,
       totalLectures: input.totalLectures,
       totalWeeks: input.totalWeeks,

@@ -19,7 +19,6 @@ const BatchAttendancePage = lazy(() => import('@/features/attendance/pages/Batch
 const BatchRosterPage = lazy(() => import('@/features/attendance/pages/BatchRosterPage').then((m) => ({ default: m.BatchRosterPage })));
 const AcademicPlanPage = lazy(() => import('@/features/academic-plan/pages/AcademicPlanPage').then((m) => ({ default: m.AcademicPlanPage })));
 const MyLeaveRequestsPage = lazy(() => import('@/features/leave-requests/pages/MyLeaveRequestsPage').then((m) => ({ default: m.MyLeaveRequestsPage })));
-const FacultyTrainingPlanPage = lazy(() => import('@/features/training-plan/pages/FacultyTrainingPlanPage').then((m) => ({ default: m.FacultyTrainingPlanPage })));
 const QuestionBankLandingPage = lazy(() => import('@/features/question-bank/pages/QuestionBankLandingPage').then((m) => ({ default: m.QuestionBankLandingPage })));
 const QuestionCapturePage = lazy(() => import('@/features/question-bank/pages/QuestionCapturePage').then((m) => ({ default: m.QuestionCapturePage })));
 const PaperGeneratorPage = lazy(() => import('@/features/question-bank/pages/PaperGeneratorPage').then((m) => ({ default: m.PaperGeneratorPage })));
@@ -53,7 +52,6 @@ const TpoAttendancePage = lazy(() => import('@/features/tpo/pages/TpoAttendanceP
 const TpoInsightsPage = lazy(() => import('@/features/tpo/pages/TpoInsightsPage').then((m) => ({ default: m.TpoInsightsPage })));
 const TpoFacultyPage = lazy(() => import('@/features/tpo/pages/TpoFacultyPage').then((m) => ({ default: m.TpoFacultyPage })));
 const TpoLeaveApprovalsPage = lazy(() => import('@/features/leave-requests/pages/TpoLeaveApprovalsPage').then((m) => ({ default: m.TpoLeaveApprovalsPage })));
-const TpoTrainingPlanOverviewPage = lazy(() => import('@/features/training-plan/pages/TpoTrainingPlanOverviewPage').then((m) => ({ default: m.TpoTrainingPlanOverviewPage })));
 const TpoQuestionBankOverviewPage = lazy(() => import('@/features/question-bank/pages/TpoQuestionBankOverviewPage').then((m) => ({ default: m.TpoQuestionBankOverviewPage })));
 const TpoCandidatesPage = lazy(() => import('@/features/candidates/pages/TpoCandidatesPage').then((m) => ({ default: m.TpoCandidatesPage })));
 const TpoPracticeLibraryPage = lazy(() => import('@/features/practice/pages/TpoPracticeLibraryPage').then((m) => ({ default: m.TpoPracticeLibraryPage })));
@@ -116,14 +114,13 @@ export const router = createBrowserRouter([
                   { path: 'attendance/:batch/:track', element: <BatchAttendancePage /> },
                   { path: 'attendance/:batch/:track/roster', element: <BatchRosterPage /> },
                   { path: 'leave-requests', element: <MyLeaveRequestsPage /> },
-                  { path: 'training-plan', element: <FacultyTrainingPlanPage /> },
                   { path: 'question-bank', element: <QuestionBankLandingPage /> },
                   { path: 'question-bank/capture', element: <QuestionCapturePage /> },
                   { path: 'question-bank/papers', element: <PapersListPage /> },
                   { path: 'question-bank/papers/generate', element: <PaperGeneratorPage /> },
                   { path: 'question-bank/papers/:id', element: <PaperPreviewPage /> },
                   { path: 'worksheets', element: <WorksheetsPage /> },
-                  { path: 'academic-plan', element: <AcademicPlanPage /> },
+                  { path: 'training-plan', element: <AcademicPlanPage /> },
                   { path: 'tests', element: <FacultyTestsPage /> },
                   { path: 'tests/new', element: <FacultyTestBuilderPage /> },
                   { path: 'tests/:id/review', element: <FacultyTestReviewPage /> },
@@ -149,7 +146,6 @@ export const router = createBrowserRouter([
                   { path: 'attendance', element: <TpoAttendancePage /> },
                   { path: 'insights', element: <TpoInsightsPage /> },
                   { path: 'leave-approvals', element: <TpoLeaveApprovalsPage /> },
-                  { path: 'training-plan', element: <TpoTrainingPlanOverviewPage /> },
                   { path: 'question-bank-overview', element: <TpoQuestionBankOverviewPage /> },
                   { path: 'timetable', element: <BatchTimetablePage /> },
                   { path: 'timetable/periods', element: <PeriodSetupPage /> },

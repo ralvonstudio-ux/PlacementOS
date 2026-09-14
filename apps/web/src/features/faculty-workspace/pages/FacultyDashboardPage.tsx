@@ -74,10 +74,10 @@ export function FacultyDashboardPage() {
         />
         <ActionCard
           icon={Sparkles}
-          title="Academic Plan"
+          title="Training Plan"
           description="Put in the syllabus, get a week-by-week plan"
           accent="purple"
-          onClick={() => navigate('/faculty/academic-plan')}
+          onClick={() => navigate('/faculty/training-plan')}
         />
         <ActionCard
           icon={Library}
