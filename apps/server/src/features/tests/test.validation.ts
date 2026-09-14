@@ -1,16 +1,35 @@
 import { z } from 'zod';
 
+const codingLanguageSchema = z.enum(['python', 'java', 'c', 'cpp']);
+
+const testCaseSchema = z.object({
+  input: z.string().default(''),
+  expectedOutput: z.string().min(1, 'A test case needs an expected output'),
+  hidden: z.boolean().default(false),
+});
+
 const testQuestionSchema = z
   .object({
     questionText: z.string().min(1).trim(),
-    questionType: z.enum(['mcq', 'short_answer']),
+    questionType: z.enum(['mcq', 'short_answer', 'coding']),
     options: z.array(z.string()).optional(),
     correctAnswer: z.string().trim().optional(),
     marks: z.number().min(0),
+    allowedLanguages: z.array(codingLanguageSchema).optional(),
+    starterCode: z.record(codingLanguageSchema, z.string()).optional(),
+    testCases: z.array(testCaseSchema).optional(),
   })
   .refine((v) => v.questionType !== 'mcq' || (v.options && v.options.filter((o) => o.trim()).length >= 2), {
     message: 'An MCQ question needs at least 2 options',
     path: ['options'],
+  })
+  .refine((v) => v.questionType !== 'coding' || (v.allowedLanguages && v.allowedLanguages.length > 0), {
+    message: 'A coding question needs at least one allowed language',
+    path: ['allowedLanguages'],
+  })
+  .refine((v) => v.questionType !== 'coding' || (v.testCases && v.testCases.length > 0), {
+    message: 'A coding question needs at least one test case',
+    path: ['testCases'],
   });
 
 export const createTestSchema = z.object({
@@ -64,6 +83,14 @@ export const submitAnswerSchema = z.object({
   questionIndex: z.number().int().min(0),
   selectedOption: z.string().optional(),
   answerText: z.string().optional(),
+  code: z.string().optional(),
+  language: codingLanguageSchema.optional(),
+});
+
+export const runCodeSchema = z.object({
+  questionIndex: z.number().int().min(0),
+  code: z.string().min(1, 'Write some code before running it'),
+  language: codingLanguageSchema,
 });
 
 export const logViolationSchema = z.object({
@@ -89,3 +116,4 @@ export type GenerateTestDraftInput = z.infer<typeof generateTestDraftSchema>;
 export type ReviewTestInput = z.infer<typeof reviewTestSchema>;
 export type SubmitAnswerInput = z.infer<typeof submitAnswerSchema>;
 export type LogViolationInput = z.infer<typeof logViolationSchema>;
+export type RunCodeInput = z.infer<typeof runCodeSchema>;

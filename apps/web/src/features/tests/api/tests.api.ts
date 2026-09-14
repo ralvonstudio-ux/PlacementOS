@@ -14,6 +14,8 @@ import type {
   LogViolationPayload,
   LogViolationResult,
   TestAttemptReview,
+  RunCodePayload,
+  RunCodeResult,
 } from '@placementos/types';
 
 const BASE = '/tests';
@@ -128,6 +130,13 @@ export const testsApi = {
   async submit(attemptId: string): Promise<TestAttempt> {
     try {
       const res = await apiClient.post<ApiResponse<TestAttempt>>(`${BASE}/attempts/${attemptId}/submit`);
+      return res.data.data!;
+    } catch (err) { throw new Error(extractErrorMessage(err)); }
+  },
+
+  async runCode(attemptId: string, questionIndex: number, payload: RunCodePayload): Promise<RunCodeResult> {
+    try {
+      const res = await apiClient.post<ApiResponse<RunCodeResult>>(`${BASE}/attempts/${attemptId}/run`, { questionIndex, ...payload });
       return res.data.data!;
     } catch (err) { throw new Error(extractErrorMessage(err)); }
   },

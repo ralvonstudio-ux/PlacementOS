@@ -1426,7 +1426,18 @@ export interface ImportSession {
 // ── Proctored Tests ────────────────────────────────────────────────────────
 
 export type TestStatus = 'draft' | 'pending_approval' | 'approved' | 'rejected' | 'published' | 'closed';
-export type TestQuestionType = 'mcq' | 'short_answer';
+export type TestQuestionType = 'mcq' | 'short_answer' | 'coding';
+
+/** Languages a coding question can be attempted/judged in — kept intentionally
+ *  small (Judge0's latest runtime for each) rather than exposing its full catalog. */
+export type CodingLanguage = 'python' | 'java' | 'c' | 'cpp';
+
+export interface TestCase {
+  input: string;
+  expectedOutput: string;
+  /** Hidden cases are never sent to the candidate's client and only run at final submit. */
+  hidden: boolean;
+}
 
 /** A question as frozen into a Test at creation time — deliberately a snapshot,
  *  not a live BankQuestion reference, so editing/deleting a bank question can
@@ -1437,6 +1448,10 @@ export interface TestQuestionSnapshot {
   options?: string[];
   correctAnswer?: string;
   marks: number;
+  /** Coding questions only, below. */
+  allowedLanguages?: CodingLanguage[];
+  starterCode?: Partial<Record<CodingLanguage, string>>;
+  testCases?: TestCase[];
 }
 
 /** Same snapshot, minus the answer key — what a candidate's client receives. */
@@ -1539,6 +1554,9 @@ export interface TestAnswer {
   questionIndex: number;
   selectedOption?: string;
   answerText?: string;
+  /** Coding questions only. */
+  code?: string;
+  language?: CodingLanguage;
 }
 
 export interface TestAttempt {
@@ -1568,6 +1586,35 @@ export interface SubmitAnswerPayload {
   questionIndex: number;
   selectedOption?: string;
   answerText?: string;
+  /** Coding questions only. */
+  code?: string;
+  language?: CodingLanguage;
+}
+
+/** Candidate-facing "Run" — executes against a coding question's visible sample
+ *  test cases only. Never persists an answer or affects scoring. */
+export interface RunCodePayload {
+  code: string;
+  language: CodingLanguage;
+}
+
+export type RunCodeStatus = 'ok' | 'compile_error' | 'runtime_error' | 'timeout' | 'not_configured';
+
+export interface RunCodeCaseResult {
+  hidden: boolean;
+  passed: boolean;
+  input: string;
+  expectedOutput: string;
+  stdout: string;
+  stderr: string;
+}
+
+export interface RunCodeResult {
+  status: RunCodeStatus;
+  /** Populated when status is 'compile_error' — a syntax error surfaced before any case runs. */
+  compileError?: string;
+  results: RunCodeCaseResult[];
+  allPassed: boolean;
 }
 
 export interface LogViolationPayload {

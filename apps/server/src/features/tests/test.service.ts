@@ -9,8 +9,9 @@ import {
   logViolationSchema,
   generateTestDraftSchema,
   reviewTestSchema,
+  runCodeSchema,
 } from './test.validation';
-import { ITest, ITestAttempt } from './test.model';
+import { ITest, ITestAttempt, ITestQuestionSnapshot } from './test.model';
 import { NotFoundError, ValidationError, ForbiddenError } from '../../middlewares/errorHandler';
 import { AuthContext } from '../../lib/auth-context';
 import { candidateRepository } from '../candidates/candidate.repository';
@@ -18,6 +19,7 @@ import { resolveCandidateId } from '../candidates/candidate.service';
 import { notificationRepository } from '../notifications/notification.repository';
 import { assertFacultyCanAccessQuestionBank } from '../training-schedule/training-schedule.service';
 import { testGeneratorService } from './test-generator.service';
+import { isJudge0Configured, runOnJudge0 } from '../../lib/judge0';
 import type {
   Test as TestApiShape,
   TestForCandidate,
@@ -25,6 +27,8 @@ import type {
   TestAttempt as TestAttemptApiShape,
   LogViolationResult,
   TestAttemptReview,
+  RunCodeResult,
+  RunCodeCaseResult,
 } from '@placementos/types';
 
 const toTestApiShape = (t: ITest): TestApiShape => ({
@@ -74,14 +78,67 @@ function generateAccessCode(length = 6): string {
   return code;
 }
 
-/** Auto-grades MCQ + exact-match short-answer questions. Open-ended answers with no
- *  correctAnswer set simply don't contribute — a human reviewer can still read them
- *  in the attempt review screen. */
-function scoreAttempt(test: ITest, attempt: ITestAttempt): number {
+/** Runs `code` against every one of a coding question's test cases via Judge0 and reports
+ *  per-case pass/fail. Shared by the candidate-facing "Run" endpoint (visible cases only) and
+ *  by scoring at submit time (all cases, including hidden ones). Compares stdout trimmed of
+ *  trailing whitespace — the same tolerance every judge (including Judge0 itself) applies, so a
+ *  correct solution isn't marked wrong over a trailing newline. */
+async function runAgainstTestCases(code: string, language: NonNullable<ITestQuestionSnapshot['allowedLanguages']>[number], cases: NonNullable<ITestQuestionSnapshot['testCases']>): Promise<RunCodeResult> {
+  if (!isJudge0Configured()) {
+    return { status: 'not_configured', results: [], allPassed: false };
+  }
+
+  const results: RunCodeCaseResult[] = [];
+  for (const testCase of cases) {
+    const run = await runOnJudge0({ code, language, stdin: testCase.input });
+
+    if (run.statusId === 6) {
+      // Compilation error — same for every case, so surface it once and stop.
+      return { status: 'compile_error', compileError: run.compileOutput || run.stderr, results: [], allPassed: false };
+    }
+
+    const stdout = run.stdout.trimEnd();
+    const expected = testCase.expectedOutput.trimEnd();
+    results.push({
+      hidden: testCase.hidden,
+      passed: run.statusId === 3 && stdout === expected, // 3 = "Accepted" (ran to completion)
+      input: testCase.input,
+      expectedOutput: testCase.expectedOutput,
+      stdout: run.stdout,
+      stderr: run.stderr,
+    });
+  }
+
+  const allPassed = results.length > 0 && results.every((r) => r.passed);
+  return { status: 'ok', results, allPassed };
+}
+
+/** Auto-grades MCQ, exact-match short-answer, and coding questions. Open-ended answers with
+ *  no correctAnswer set simply don't contribute — a human reviewer can still read them in the
+ *  attempt review screen. Coding questions award proportional marks based on the fraction of
+ *  test cases (visible + hidden) the candidate's last-saved code passes; if Judge0 isn't
+ *  configured, or the question has no test cases, they contribute 0 (manual review only). */
+async function scoreAttempt(test: ITest, attempt: ITestAttempt): Promise<number> {
   let score = 0;
   for (const answer of attempt.answers) {
     const question = test.questions[answer.questionIndex];
-    if (!question?.correctAnswer) continue;
+    if (!question) continue;
+
+    if (question.questionType === 'coding') {
+      if (!answer.code || !answer.language || !question.testCases?.length || !isJudge0Configured()) continue;
+      try {
+        const result = await runAgainstTestCases(answer.code, answer.language, question.testCases);
+        if (result.status === 'ok' && result.results.length > 0) {
+          const passedCount = result.results.filter((r) => r.passed).length;
+          score += Math.round(question.marks * (passedCount / result.results.length));
+        }
+      } catch {
+        // Judge0 unreachable at submit time — treat as unscored rather than failing the whole submit.
+      }
+      continue;
+    }
+
+    if (!question.correctAnswer) continue;
     const given = question.questionType === 'mcq' ? answer.selectedOption : answer.answerText;
     if (given?.trim().toLowerCase() === question.correctAnswer.trim().toLowerCase()) {
       score += question.marks;
@@ -313,7 +370,16 @@ export const testService = {
 
     return {
       attempt: toAttemptApiShape(attempt),
-      questions: test.questions.map((q) => ({ questionText: q.questionText, questionType: q.questionType, options: q.options, marks: q.marks })),
+      questions: test.questions.map((q) => ({
+        questionText: q.questionText,
+        questionType: q.questionType,
+        options: q.options,
+        marks: q.marks,
+        allowedLanguages: q.allowedLanguages,
+        starterCode: q.starterCode,
+        // Hidden test cases are never sent to the candidate's client.
+        testCases: q.testCases?.filter((tc) => !tc.hidden),
+      })),
       durationMinutes: test.durationMinutes,
       violationLimit: test.violationLimit,
       serverTime: new Date().toISOString(),
@@ -352,7 +418,7 @@ export const testService = {
 
     let autoSubmitted = false;
     if (violationCount > test.violationLimit) {
-      const score = updated ? scoreAttempt(test, updated) : undefined;
+      const score = updated ? await scoreAttempt(test, updated) : undefined;
       await testAttemptRepository.submit(attemptId, { autoSubmitted: true, score });
       autoSubmitted = true;
     }
@@ -369,9 +435,31 @@ export const testService = {
     const test = await testRepository.findById(attempt.testId, ctx.instituteId);
     if (!test) throw new NotFoundError('Test');
 
-    const score = scoreAttempt(test, attempt);
+    const score = await scoreAttempt(test, attempt);
     const updated = await testAttemptRepository.submit(attemptId, { autoSubmitted: false, score });
     if (!updated) throw new NotFoundError('Test attempt');
     return toAttemptApiShape(updated);
+  },
+
+  /** Candidate-facing "Run" — executes against a coding question's *visible* sample test
+   *  cases only (never the hidden ones used for scoring), and never persists anything. */
+  async runCode(attemptId: string, rawInput: unknown, ctx: AuthContext): Promise<RunCodeResult> {
+    const data = runCodeSchema.parse(rawInput);
+    const candidateId = await resolveCandidateId(ctx);
+    const attempt = await testAttemptRepository.findById(attemptId, ctx.instituteId);
+    if (!attempt || attempt.candidateId !== candidateId) throw new NotFoundError('Test attempt');
+    if (attempt.status !== 'in_progress') throw new ValidationError('This attempt has already been submitted');
+
+    const test = await testRepository.findById(attempt.testId, ctx.instituteId);
+    if (!test) throw new NotFoundError('Test');
+
+    const question = test.questions[data.questionIndex];
+    if (!question || question.questionType !== 'coding') throw new ValidationError('Question is not a coding question');
+    if (!question.allowedLanguages?.includes(data.language)) throw new ValidationError('That language is not allowed for this question');
+
+    const visibleCases = question.testCases?.filter((tc) => !tc.hidden) ?? [];
+    if (visibleCases.length === 0) return { status: 'ok', results: [], allPassed: true };
+
+    return runAgainstTestCases(data.code, data.language, visibleCases);
   },
 };

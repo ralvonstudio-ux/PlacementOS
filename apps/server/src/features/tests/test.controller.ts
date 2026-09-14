@@ -132,4 +132,12 @@ export const testController = {
       sendSuccess(res, attempt, 'Test submitted');
     } catch (err) { next(err); }
   },
+
+  async runCode(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const ctx = buildAuthContext(req.user!, req.ip ?? undefined);
+      const result = await testService.runCode(req.params.attemptId, req.body, ctx);
+      sendSuccess(res, result);
+    } catch (err) { next(err); }
+  },
 };

@@ -1,18 +1,29 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Trash2, Save, Loader2, Sparkles, PencilLine } from 'lucide-react';
+import { Plus, Trash2, Save, Loader2, Sparkles, PencilLine, Eye, EyeOff } from 'lucide-react';
 import { PageContainer } from '@/components/workspace/PageContainer';
 import { WorkspaceHeader } from '@/components/workspace/WorkspaceHeader';
 import { ContentSourceInput } from '@/features/content-extraction/components/ContentSourceInput';
 import { useAuth } from '@/features/auth/hooks/useAuth';
 import { useCreateTest, useGenerateTestDraft } from '../hooks/useTests';
 import { extractErrorMessage } from '@/services/api';
-import type { TestQuestionSnapshot, TestQuestionType } from '@placementos/types';
+import type { CodingLanguage, TestCase, TestQuestionSnapshot, TestQuestionType } from '@placementos/types';
 
 const inputCls = 'w-full h-10 px-3 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-500';
 
+const ALL_LANGUAGES: { value: CodingLanguage; label: string }[] = [
+  { value: 'python', label: 'Python' },
+  { value: 'java', label: 'Java' },
+  { value: 'c', label: 'C' },
+  { value: 'cpp', label: 'C++' },
+];
+
 function emptyQuestion(): TestQuestionSnapshot {
   return { questionText: '', questionType: 'mcq', options: ['', '', '', ''], correctAnswer: '', marks: 1 };
+}
+
+function emptyTestCase(): TestCase {
+  return { input: '', expectedOutput: '', hidden: false };
 }
 
 export function TestBuilderPage() {
@@ -202,9 +213,19 @@ function ManualBuilderForm({ basePath }: { basePath: string }) {
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-semibold text-gray-400">Question {i + 1}</span>
               <div className="flex items-center gap-2">
-                <select value={q.questionType} onChange={(e) => updateQuestion(i, { questionType: e.target.value as TestQuestionType })} className="h-8 px-2 rounded-lg border border-gray-200 text-xs">
+                <select
+                  value={q.questionType}
+                  onChange={(e) => {
+                    const questionType = e.target.value as TestQuestionType;
+                    updateQuestion(i, questionType === 'coding'
+                      ? { questionType, allowedLanguages: ['python'], starterCode: {}, testCases: [emptyTestCase()] }
+                      : { questionType });
+                  }}
+                  className="h-8 px-2 rounded-lg border border-gray-200 text-xs"
+                >
                   <option value="mcq">MCQ</option>
                   <option value="short_answer">Short Answer</option>
+                  <option value="coding">Coding</option>
                 </select>
                 <input type="number" min={0} value={q.marks} onChange={(e) => updateQuestion(i, { marks: Number(e.target.value) })} placeholder="Marks" className="w-16 h-8 px-2 rounded-lg border border-gray-200 text-xs" />
                 {questions.length > 1 && (
@@ -233,6 +254,8 @@ function ManualBuilderForm({ basePath }: { basePath: string }) {
                 </div>
                 <input value={q.correctAnswer ?? ''} onChange={(e) => updateQuestion(i, { correctAnswer: e.target.value })} placeholder="Correct answer (must match an option exactly, for auto-grading)" className={inputCls} />
               </>
+            ) : q.questionType === 'coding' ? (
+              <CodingQuestionFields question={q} onChange={(patch) => updateQuestion(i, patch)} />
             ) : (
               <input value={q.correctAnswer ?? ''} onChange={(e) => updateQuestion(i, { correctAnswer: e.target.value })} placeholder="Expected answer for auto-grading (optional — leave blank for manual review)" className={inputCls} />
             )}
@@ -262,5 +285,101 @@ function ManualBuilderForm({ basePath }: { basePath: string }) {
         </button>
       </div>
     </>
+  );
+}
+
+function CodingQuestionFields({ question, onChange }: { question: TestQuestionSnapshot; onChange: (patch: Partial<TestQuestionSnapshot>) => void }) {
+  const allowedLanguages = question.allowedLanguages ?? [];
+  const starterCode = question.starterCode ?? {};
+  const testCases = question.testCases ?? [];
+
+  function toggleLanguage(lang: CodingLanguage) {
+    const next = allowedLanguages.includes(lang) ? allowedLanguages.filter((l) => l !== lang) : [...allowedLanguages, lang];
+    onChange({ allowedLanguages: next });
+  }
+
+  function updateTestCase(i: number, patch: Partial<TestCase>) {
+    onChange({ testCases: testCases.map((tc, idx) => (idx === i ? { ...tc, ...patch } : tc)) });
+  }
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <label className="block text-xs text-gray-500 mb-1.5">Allowed languages</label>
+        <div className="flex flex-wrap gap-2">
+          {ALL_LANGUAGES.map(({ value, label }) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => toggleLanguage(value)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${allowedLanguages.includes(value) ? 'bg-violet-600 border-violet-600 text-white' : 'border-gray-200 text-gray-500 hover:border-gray-300'}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {allowedLanguages.length > 0 && (
+        <div>
+          <label className="block text-xs text-gray-500 mb-1.5">Starter code (optional, per language)</label>
+          <div className="space-y-2">
+            {allowedLanguages.map((lang) => (
+              <div key={lang}>
+                <span className="text-[11px] font-semibold text-gray-400 uppercase">{lang}</span>
+                <textarea
+                  value={starterCode[lang] ?? ''}
+                  onChange={(e) => onChange({ starterCode: { ...starterCode, [lang]: e.target.value } })}
+                  rows={3}
+                  placeholder={`Starter code shown to candidates for ${lang}…`}
+                  className="w-full mt-1 px-3 py-2 rounded-lg border border-gray-200 text-xs font-mono resize-none focus:outline-none focus:ring-1 focus:ring-violet-400"
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div>
+        <div className="flex items-center justify-between mb-1.5">
+          <label className="block text-xs text-gray-500">Test cases</label>
+          <button type="button" onClick={() => onChange({ testCases: [...testCases, emptyTestCase()] })} className="inline-flex items-center gap-1 text-xs font-semibold text-violet-600 hover:text-violet-700">
+            <Plus className="w-3 h-3" /> Add test case
+          </button>
+        </div>
+        <div className="space-y-2">
+          {testCases.map((tc, i) => (
+            <div key={i} className="rounded-lg border border-gray-200 p-3 space-y-2">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <span className="text-[11px] text-gray-400">Input (stdin)</span>
+                  <textarea value={tc.input} onChange={(e) => updateTestCase(i, { input: e.target.value })} rows={2} placeholder="(optional)" className="w-full mt-0.5 px-2.5 py-1.5 rounded-lg border border-gray-200 text-xs font-mono resize-none focus:outline-none focus:ring-1 focus:ring-violet-400" />
+                </div>
+                <div>
+                  <span className="text-[11px] text-gray-400">Expected output</span>
+                  <textarea value={tc.expectedOutput} onChange={(e) => updateTestCase(i, { expectedOutput: e.target.value })} rows={2} placeholder="Expected stdout" className="w-full mt-0.5 px-2.5 py-1.5 rounded-lg border border-gray-200 text-xs font-mono resize-none focus:outline-none focus:ring-1 focus:ring-violet-400" />
+                </div>
+              </div>
+              <div className="flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => updateTestCase(i, { hidden: !tc.hidden })}
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-gray-700"
+                  title={tc.hidden ? 'Hidden — only used for scoring, never shown to the candidate' : 'Visible — shown to the candidate as a sample, and used for Run'}
+                >
+                  {tc.hidden ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  {tc.hidden ? 'Hidden (scoring only)' : 'Visible (sample)'}
+                </button>
+                {testCases.length > 1 && (
+                  <button type="button" onClick={() => onChange({ testCases: testCases.filter((_, idx) => idx !== i) })} className="p-1 text-gray-400 hover:text-red-600">
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }

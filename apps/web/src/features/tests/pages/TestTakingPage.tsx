@@ -2,8 +2,11 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { AlertTriangle, Camera, CheckCircle2, Loader2, Maximize, MonitorUp, ShieldAlert, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useStartTest, useSubmitTestAnswer, useLogTestViolation, useSubmitTest } from '../hooks/useTests';
+import { CodingQuestionPanel } from '../components/CodingQuestionPanel';
 import { extractErrorMessage } from '@/services/api';
-import type { TestQuestionForCandidate, TestViolationType, StartTestAttemptResult } from '@placementos/types';
+import type { TestQuestionForCandidate, TestViolationType, StartTestAttemptResult, CodingLanguage } from '@placementos/types';
+
+const PRIMARY_BTN = 'bg-gradient-to-r from-orange-500 via-pink-500 to-purple-600 text-white hover:opacity-90 transition-opacity';
 
 type Phase = 'instructions' | 'in_progress' | 'submitted' | 'auto_submitted';
 
@@ -82,7 +85,7 @@ export function TestTakingPage() {
 
   const [phase, setPhase] = useState<Phase>('instructions');
   const [session, setSession] = useState<StartTestAttemptResult | null>(null);
-  const [answers, setAnswers] = useState<Record<number, { selectedOption?: string; answerText?: string }>>({});
+  const [answers, setAnswers] = useState<Record<number, { selectedOption?: string; answerText?: string; code?: string; language?: CodingLanguage }>>({});
   const [currentIndex, setCurrentIndex] = useState(0);
   const [secondsLeft, setSecondsLeft] = useState(0);
   const [violationBanner, setViolationBanner] = useState<{ type: TestViolationType; count: number; limit: number } | null>(null);
@@ -91,6 +94,12 @@ export function TestTakingPage() {
   const [accessCode, setAccessCode] = useState('');
   const [error, setError] = useState('');
   const [finalScore, setFinalScore] = useState<number | undefined>();
+  // True the moment fullscreen is lost (tab-switch, Esc, etc). `requestFullscreen()` only
+  // succeeds when called from a real user gesture, so instead of retrying it automatically
+  // (which silently fails and leaves the browser chrome visible for the rest of the attempt —
+  // see the fullscreenchange handler below) we block the test behind a recovery overlay whose
+  // button click itself provides that gesture.
+  const [fullscreenLost, setFullscreenLost] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -156,7 +165,9 @@ export function TestTakingPage() {
     const onFullscreenChange = () => {
       if (!document.fullscreenElement) {
         reportViolationRef.current('fullscreen_exit');
-        document.documentElement.requestFullscreen().catch(() => {});
+        setFullscreenLost(true);
+      } else {
+        setFullscreenLost(false);
       }
     };
     const onCopyCutPaste = (e: ClipboardEvent) => { e.preventDefault(); reportViolationRef.current('copy_paste'); };
@@ -248,6 +259,7 @@ export function TestTakingPage() {
     setError('');
     setCameraError('');
     setScreenShareError('');
+    setFullscreenLost(false);
 
     if (!accessCode.trim()) {
       setError('Enter the access code from your notification to continue.');
@@ -314,11 +326,15 @@ export function TestTakingPage() {
     return answers[index] ?? {};
   }
 
-  function setAnswer(index: number, patch: { selectedOption?: string; answerText?: string }) {
+  function setAnswer(index: number, patch: { selectedOption?: string; answerText?: string; code?: string; language?: CodingLanguage }) {
     setAnswers((prev) => ({ ...prev, [index]: { ...prev[index], ...patch } }));
     if (attemptIdRef.current) {
       submitAnswerMutation.mutate({ attemptId: attemptIdRef.current, payload: { questionIndex: index, ...patch } });
     }
+  }
+
+  function handleResumeFullscreen() {
+    document.documentElement.requestFullscreen().catch(() => {});
   }
 
   async function handleFinalSubmit(confirmed: boolean) {
@@ -341,22 +357,22 @@ export function TestTakingPage() {
 
   if (phase === 'submitted' || phase === 'auto_submitted') {
     return (
-      <div className="min-h-screen bg-[#0B0620] flex items-center justify-center p-6">
-        <div className="bg-[#150C29] border border-white/10 rounded-2xl p-10 max-w-md text-center">
+      <div className="min-h-screen bg-white flex items-center justify-center p-6">
+        <div className="bg-white border border-gray-100 shadow-sm rounded-2xl p-10 max-w-md text-center">
           {phase === 'auto_submitted' ? (
             <>
-              <ShieldAlert className="w-12 h-12 text-red-400 mx-auto mb-4" />
-              <h1 className="text-xl font-bold text-white mb-2">Test auto-submitted</h1>
-              <p className="text-sm text-zinc-400">The proctoring violation limit for this test was exceeded, so your attempt was submitted automatically.</p>
+              <ShieldAlert className="w-12 h-12 text-red-500 mx-auto mb-4" />
+              <h1 className="text-xl font-bold text-gray-900 mb-2">Test auto-submitted</h1>
+              <p className="text-sm text-gray-500">The proctoring violation limit for this test was exceeded, so your attempt was submitted automatically.</p>
             </>
           ) : (
             <>
-              <CheckCircle2 className="w-12 h-12 text-green-400 mx-auto mb-4" />
-              <h1 className="text-xl font-bold text-white mb-2">Test submitted</h1>
-              {finalScore !== undefined && <p className="text-sm text-zinc-400">Auto-graded score: <span className="text-white font-semibold">{finalScore}</span></p>}
+              <CheckCircle2 className="w-12 h-12 text-green-500 mx-auto mb-4" />
+              <h1 className="text-xl font-bold text-gray-900 mb-2">Test submitted</h1>
+              {finalScore !== undefined && <p className="text-sm text-gray-500">Auto-graded score: <span className="text-gray-900 font-semibold">{finalScore}</span></p>}
             </>
           )}
-          <button onClick={() => navigate('/candidate/tests')} className="mt-6 h-10 px-5 rounded-xl bg-violet-600 hover:bg-violet-700 text-sm font-semibold text-white transition-colors">
+          <button onClick={() => navigate('/candidate/tests')} className={`mt-6 h-10 px-5 rounded-xl text-sm font-semibold ${PRIMARY_BTN}`}>
             Back to Tests
           </button>
         </div>
@@ -366,11 +382,11 @@ export function TestTakingPage() {
 
   if (phase === 'instructions') {
     return (
-      <div className="min-h-screen bg-[#0B0620] flex items-center justify-center p-6">
-        <div className="bg-[#150C29] border border-white/10 rounded-2xl p-8 max-w-lg w-full">
-          <ShieldAlert className="w-10 h-10 text-violet-400 mb-4" />
-          <h1 className="text-xl font-bold text-white mb-2">Before you start</h1>
-          <p className="text-sm text-zinc-400 mb-5">This is a proctored test. The following are monitored and logged for the entire duration:</p>
+      <div className="min-h-screen bg-white flex items-center justify-center p-6">
+        <div className="bg-white border border-gray-100 shadow-sm rounded-2xl p-8 max-w-lg w-full">
+          <ShieldAlert className="w-10 h-10 text-orange-500 mb-4" />
+          <h1 className="text-xl font-bold text-gray-900 mb-2">Before you start</h1>
+          <p className="text-sm text-gray-500 mb-5">This is a proctored test. The following are monitored and logged for the entire duration:</p>
           <ul className="space-y-2.5 mb-6">
             {[
               'Fullscreen mode is required — exiting it is logged as a violation',
@@ -381,34 +397,34 @@ export function TestTakingPage() {
               'Browser extensions (Grammarly, ad-blockers, translators, wallets, etc.) are detected and logged — disable them before starting',
               'Exceeding the violation limit auto-submits your test immediately',
             ].map((line) => (
-              <li key={line} className="flex items-start gap-2.5 text-sm text-zinc-300">
-                <AlertTriangle className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
+              <li key={line} className="flex items-start gap-2.5 text-sm text-gray-600">
+                <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
                 {line}
               </li>
             ))}
           </ul>
 
           <div className="mb-4">
-            <label className="block text-xs font-medium text-zinc-400 mb-1.5">Access code (from your notification)</label>
+            <label className="block text-xs font-medium text-gray-500 mb-1.5">Access code (from your notification)</label>
             <input
               value={accessCode}
               onChange={(e) => setAccessCode(e.target.value)}
               placeholder="e.g. K7XPQ2"
               autoCapitalize="characters"
-              className="w-full h-11 px-3.5 rounded-xl bg-[#0B0620] border border-white/10 text-sm text-white tracking-widest placeholder-zinc-600 focus:outline-none focus:border-violet-500"
+              className="w-full h-11 px-3.5 rounded-xl bg-white border border-gray-200 text-sm text-gray-900 tracking-widest placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500"
             />
           </div>
 
           {(error || cameraError || screenShareError) && (
-            <div className="mb-4 rounded-xl bg-red-950/40 border border-red-900/30 px-4 py-3">
-              <p className="text-sm text-red-400">{error || cameraError || screenShareError}</p>
+            <div className="mb-4 rounded-xl bg-red-50 border border-red-100 px-4 py-3">
+              <p className="text-sm text-red-600">{error || cameraError || screenShareError}</p>
             </div>
           )}
 
           <button
             onClick={handleStart}
             disabled={startTest.isPending}
-            className="w-full inline-flex items-center justify-center gap-2 h-11 rounded-xl bg-violet-600 hover:bg-violet-700 text-sm font-bold text-white transition-colors disabled:opacity-50"
+            className={`w-full inline-flex items-center justify-center gap-2 h-11 rounded-xl text-sm font-bold disabled:opacity-50 ${PRIMARY_BTN}`}
           >
             {startTest.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Maximize className="w-4 h-4" />}
             Enable Fullscreen, Camera &amp; Screen Share, Start Test
@@ -418,57 +434,83 @@ export function TestTakingPage() {
     );
   }
 
+  const isCoding = question?.questionType === 'coding';
+
   return (
-    <div className="min-h-screen bg-[#0B0620] text-white flex flex-col select-none" onDragStart={(e) => e.preventDefault()}>
-      <header className="flex items-center justify-between px-6 py-4 border-b border-white/10">
+    <div className="min-h-screen bg-white text-gray-900 flex flex-col select-none relative" onDragStart={(e) => e.preventDefault()}>
+      {fullscreenLost && (
+        <div className="fixed inset-0 z-50 bg-white/95 backdrop-blur-sm flex items-center justify-center p-6">
+          <div className="bg-white border border-gray-100 shadow-lg rounded-2xl p-8 max-w-sm text-center">
+            <ShieldAlert className="w-10 h-10 text-red-500 mx-auto mb-4" />
+            <h2 className="text-lg font-bold text-gray-900 mb-2">You left fullscreen</h2>
+            <p className="text-sm text-gray-500 mb-6">This has been logged as a violation. The test is paused — click below to re-enter fullscreen and continue.</p>
+            <button onClick={handleResumeFullscreen} className={`w-full inline-flex items-center justify-center gap-2 h-11 rounded-xl text-sm font-bold ${PRIMARY_BTN}`}>
+              <Maximize className="w-4 h-4" /> Resume in Fullscreen
+            </button>
+          </div>
+        </div>
+      )}
+
+      <header className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
         <div className="flex items-center gap-3">
-          <ShieldAlert className="w-4 h-4 text-violet-400" />
+          <ShieldAlert className="w-4 h-4 text-orange-500" />
           <span className="text-sm font-semibold">Proctored Test</span>
         </div>
-        <div className={`font-mono text-lg font-bold tabular-nums ${secondsLeft < 60 ? 'text-red-400' : 'text-white'}`}>
+        <div className={`font-mono text-lg font-bold tabular-nums ${secondsLeft < 60 ? 'text-red-500' : 'text-gray-900'}`}>
           {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
         </div>
         <div className="flex items-center gap-3">
-          <video ref={videoRef} autoPlay muted playsInline className="w-14 h-10 rounded-lg border border-white/20 object-cover bg-black" />
+          <video ref={videoRef} autoPlay muted playsInline className="w-14 h-10 rounded-lg border border-gray-200 object-cover bg-black" />
         </div>
       </header>
 
       {violationBanner && (
-        <div className="bg-red-950/50 border-b border-red-900/40 px-6 py-2.5 flex items-center justify-between text-sm">
-          <span className="text-red-300 flex items-center gap-2">
+        <div className="bg-red-50 border-b border-red-100 px-6 py-2.5 flex items-center justify-between text-sm">
+          <span className="text-red-600 flex items-center gap-2">
             <AlertTriangle className="w-4 h-4" />
             {VIOLATION_LABEL[violationBanner.type]} — violation {violationBanner.count} of {violationBanner.limit} allowed
           </span>
-          <button onClick={() => setViolationBanner(null)} className="text-red-400 hover:text-red-200">Dismiss</button>
+          <button onClick={() => setViolationBanner(null)} className="text-red-500 hover:text-red-700">Dismiss</button>
         </div>
       )}
 
-      <main className="flex-1 flex flex-col max-w-3xl mx-auto w-full px-6 py-8">
+      <main className={`flex-1 flex flex-col w-full px-6 py-8 mx-auto ${isCoding ? 'max-w-5xl' : 'max-w-3xl'}`}>
         <div className="flex items-center justify-between mb-6">
-          <span className="text-sm text-zinc-400">Question {currentIndex + 1} of {questions.length}</span>
-          <span className="text-sm text-zinc-400">{question?.marks} mark{question?.marks === 1 ? '' : 's'}</span>
+          <span className="text-sm text-gray-500">Question {currentIndex + 1} of {questions.length}</span>
+          <span className="text-sm text-gray-500">{question?.marks} mark{question?.marks === 1 ? '' : 's'}</span>
         </div>
 
         {question && (
-          <div className="bg-[#150C29] border border-white/10 rounded-2xl p-6 flex-1">
-            <p className="text-base text-white mb-6">{question.questionText}</p>
+          <div className="bg-white border border-gray-100 shadow-sm rounded-2xl p-6 flex-1">
+            <p className="text-base text-gray-900 mb-6 whitespace-pre-wrap">{question.questionText}</p>
 
             {question.questionType === 'mcq' ? (
               <div className="space-y-2.5">
                 {(question.options ?? []).map((opt, i) => (
-                  <label key={i} className={`flex items-center gap-3 px-4 py-3 rounded-xl border cursor-pointer transition-colors ${answerFor(currentIndex).selectedOption === opt ? 'border-violet-500 bg-violet-500/10' : 'border-white/10 hover:border-white/20'}`}>
-                    <input type="radio" name={`q-${currentIndex}`} checked={answerFor(currentIndex).selectedOption === opt} onChange={() => setAnswer(currentIndex, { selectedOption: opt })} className="accent-violet-500" />
-                    <span className="text-sm text-zinc-200">{opt}</span>
+                  <label key={i} className={`flex items-center gap-3 px-4 py-3 rounded-xl border cursor-pointer transition-colors ${answerFor(currentIndex).selectedOption === opt ? 'border-orange-500 bg-orange-50' : 'border-gray-200 hover:border-gray-300'} ${fullscreenLost ? 'opacity-50 pointer-events-none' : ''}`}>
+                    <input type="radio" name={`q-${currentIndex}`} checked={answerFor(currentIndex).selectedOption === opt} onChange={() => setAnswer(currentIndex, { selectedOption: opt })} disabled={fullscreenLost} className="accent-orange-500" />
+                    <span className="text-sm text-gray-700">{opt}</span>
                   </label>
                 ))}
               </div>
+            ) : question.questionType === 'coding' ? (
+              <CodingQuestionPanel
+                attemptId={attemptIdRef.current}
+                questionIndex={currentIndex}
+                question={question}
+                code={answerFor(currentIndex).code ?? question.starterCode?.[answerFor(currentIndex).language ?? question.allowedLanguages?.[0] ?? 'python'] ?? ''}
+                language={answerFor(currentIndex).language ?? question.allowedLanguages?.[0] ?? 'python'}
+                onChange={(patch) => setAnswer(currentIndex, patch)}
+                disabled={fullscreenLost}
+              />
             ) : (
               <textarea
                 value={answerFor(currentIndex).answerText ?? ''}
                 onChange={(e) => setAnswer(currentIndex, { answerText: e.target.value })}
                 rows={6}
+                disabled={fullscreenLost}
                 placeholder="Type your answer…"
-                className="w-full px-4 py-3 rounded-xl bg-[#0B0620] border border-white/10 text-sm text-white placeholder-zinc-600 resize-none focus:outline-none focus:border-violet-500"
+                className="w-full px-4 py-3 rounded-xl bg-white border border-gray-200 text-sm text-gray-900 placeholder-gray-400 resize-none focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500 disabled:opacity-50"
               />
             )}
           </div>
@@ -477,8 +519,8 @@ export function TestTakingPage() {
         <div className="flex items-center justify-between mt-6">
           <button
             onClick={() => setCurrentIndex((i) => Math.max(0, i - 1))}
-            disabled={currentIndex === 0}
-            className="inline-flex items-center gap-1.5 h-10 px-4 rounded-xl border border-white/10 text-sm font-medium text-zinc-300 hover:bg-white/5 disabled:opacity-30 transition-colors"
+            disabled={currentIndex === 0 || fullscreenLost}
+            className="inline-flex items-center gap-1.5 h-10 px-4 rounded-xl border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-30 transition-colors"
           >
             <ChevronLeft className="w-4 h-4" /> Previous
           </button>
@@ -486,8 +528,8 @@ export function TestTakingPage() {
           {currentIndex === questions.length - 1 ? (
             <button
               onClick={() => handleFinalSubmit(true)}
-              disabled={submitTestMutation.isPending}
-              className="inline-flex items-center gap-2 h-10 px-5 rounded-xl bg-green-600 hover:bg-green-700 text-sm font-bold text-white transition-colors disabled:opacity-50"
+              disabled={submitTestMutation.isPending || fullscreenLost}
+              className={`inline-flex items-center gap-2 h-10 px-5 rounded-xl text-sm font-bold disabled:opacity-50 ${PRIMARY_BTN}`}
             >
               {submitTestMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
               Submit Test
@@ -495,7 +537,8 @@ export function TestTakingPage() {
           ) : (
             <button
               onClick={() => setCurrentIndex((i) => Math.min(questions.length - 1, i + 1))}
-              className="inline-flex items-center gap-1.5 h-10 px-4 rounded-xl bg-violet-600 hover:bg-violet-700 text-sm font-semibold text-white transition-colors"
+              disabled={fullscreenLost}
+              className={`inline-flex items-center gap-1.5 h-10 px-4 rounded-xl text-sm font-semibold disabled:opacity-50 ${PRIMARY_BTN}`}
             >
               Next <ChevronRight className="w-4 h-4" />
             </button>
@@ -508,7 +551,7 @@ export function TestTakingPage() {
               key={i}
               onClick={() => setCurrentIndex(i)}
               className={`w-8 h-8 rounded-lg text-xs font-semibold transition-colors ${
-                i === currentIndex ? 'bg-violet-600 text-white' : answers[i]?.selectedOption || answers[i]?.answerText ? 'bg-green-500/20 text-green-300' : 'bg-white/5 text-zinc-400'
+                i === currentIndex ? 'bg-gradient-to-r from-orange-500 via-pink-500 to-purple-600 text-white' : answers[i]?.selectedOption || answers[i]?.answerText || answers[i]?.code ? 'bg-green-50 text-green-700' : 'bg-gray-50 text-gray-400'
               }`}
             >
               {i + 1}
@@ -517,7 +560,7 @@ export function TestTakingPage() {
         </div>
       </main>
 
-      <footer className="px-6 py-2.5 border-t border-white/10 flex items-center gap-2 text-xs text-zinc-500">
+      <footer className="px-6 py-2.5 border-t border-gray-100 flex items-center gap-2 text-xs text-gray-400">
         <Camera className="w-3.5 h-3.5" />
         <MonitorUp className="w-3.5 h-3.5" />
         Camera &amp; screen share active · Fullscreen enforced · Extensions monitored · All activity is logged

@@ -1,7 +1,16 @@
 import mongoose, { Document, Schema } from 'mongoose';
 
 export type TestStatus = 'draft' | 'pending_approval' | 'approved' | 'rejected' | 'published' | 'closed';
-export type TestQuestionType = 'mcq' | 'short_answer';
+export type TestQuestionType = 'mcq' | 'short_answer' | 'coding';
+export type CodingLanguage = 'python' | 'java' | 'c' | 'cpp';
+
+const CODING_LANGUAGES = ['python', 'java', 'c', 'cpp'] as const;
+
+export interface ITestCase {
+  input: string;
+  expectedOutput: string;
+  hidden: boolean;
+}
 
 export interface ITestQuestionSnapshot {
   questionText: string;
@@ -9,6 +18,10 @@ export interface ITestQuestionSnapshot {
   options?: string[];
   correctAnswer?: string;
   marks: number;
+  /** Coding questions only, below. */
+  allowedLanguages?: CodingLanguage[];
+  starterCode?: Partial<Record<CodingLanguage, string>>;
+  testCases?: ITestCase[];
 }
 
 export interface ITest extends Document {
@@ -49,13 +62,25 @@ export interface ITest extends Document {
   updatedAt: Date;
 }
 
+const testCaseSchema = new Schema<ITestCase>(
+  {
+    input: { type: String, default: '' },
+    expectedOutput: { type: String, required: true },
+    hidden: { type: Boolean, default: false },
+  },
+  { _id: false }
+);
+
 const testQuestionSchema = new Schema<ITestQuestionSnapshot>(
   {
     questionText: { type: String, required: true, trim: true },
-    questionType: { type: String, enum: ['mcq', 'short_answer'], required: true },
+    questionType: { type: String, enum: ['mcq', 'short_answer', 'coding'], required: true },
     options: { type: [String] },
     correctAnswer: { type: String, trim: true },
     marks: { type: Number, required: true, min: 0 },
+    allowedLanguages: { type: [String], enum: CODING_LANGUAGES },
+    starterCode: { type: Schema.Types.Mixed },
+    testCases: { type: [testCaseSchema] },
   },
   { _id: false }
 );
@@ -127,6 +152,8 @@ export interface ITestAnswer {
   questionIndex: number;
   selectedOption?: string;
   answerText?: string;
+  code?: string;
+  language?: CodingLanguage;
 }
 
 export interface ITestAttempt extends Document {
@@ -150,7 +177,13 @@ const violationSchema = new Schema<ITestViolation>(
 );
 
 const answerSchema = new Schema<ITestAnswer>(
-  { questionIndex: { type: Number, required: true }, selectedOption: { type: String }, answerText: { type: String } },
+  {
+    questionIndex: { type: Number, required: true },
+    selectedOption: { type: String },
+    answerText: { type: String },
+    code: { type: String },
+    language: { type: String, enum: CODING_LANGUAGES },
+  },
   { _id: false }
 );
 

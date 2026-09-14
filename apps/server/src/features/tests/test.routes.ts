@@ -13,6 +13,7 @@ router.post('/:id/start', authorize('candidate'), testController.start);
 router.post('/attempts/:attemptId/answers', authorize('candidate'), testController.submitAnswer);
 router.post('/attempts/:attemptId/violations', authorize('candidate'), testController.logViolation);
 router.post('/attempts/:attemptId/submit', authorize('candidate'), testController.submit);
+router.post('/attempts/:attemptId/run', authorize('candidate'), testController.runCode);
 
 // Faculty / TPO authoring + review.
 router.get('/', authorize('admin', 'tpo', 'faculty'), testController.list);

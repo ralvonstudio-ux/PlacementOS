@@ -24,6 +24,12 @@ const envSchema = z.object({
   OPENAI_API_KEY: z.string().optional(),
   OPENAI_MODEL: z.string().default('gpt-4o-mini'),
   AI_MAX_CONCURRENCY: z.coerce.number().default(4),
+  // Judge0 (code execution for coding-type test questions) — optional; when unset, the
+  // "Run" endpoint and coding auto-grading both degrade to a clear "not configured" result
+  // instead of failing the whole request.
+  JUDGE0_API_URL: z.string().optional(),
+  JUDGE0_API_KEY: z.string().optional(),
+  JUDGE0_API_HOST: z.string().default('judge0-ce.p.rapidapi.com'),
   // Cloudflare R2 (file storage)
   R2_ACCOUNT_ID: z.string().optional(),
   R2_ACCESS_KEY_ID: z.string().optional(),

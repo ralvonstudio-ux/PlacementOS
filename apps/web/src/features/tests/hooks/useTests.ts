@@ -8,6 +8,7 @@ import type {
   ReviewTestPayload,
   SubmitAnswerPayload,
   LogViolationPayload,
+  RunCodePayload,
 } from '@placementos/types';
 
 export const testKeys = {
@@ -109,3 +110,9 @@ export const useSubmitTest = () => {
     onSuccess: () => qc.invalidateQueries({ queryKey: testKeys.mine() }),
   });
 };
+
+export const useRunCode = () =>
+  useMutation({
+    mutationFn: ({ attemptId, questionIndex, payload }: { attemptId: string; questionIndex: number; payload: RunCodePayload }) =>
+      testsApi.runCode(attemptId, questionIndex, payload),
+  });
