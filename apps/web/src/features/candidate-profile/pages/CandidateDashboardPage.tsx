@@ -35,8 +35,8 @@ export function CandidateDashboardPage() {
   }
 
   return (
-    <PageContainer className="pt-4 sm:pt-6">
-      <SectionTitle>LeetCode Progress</SectionTitle>
+    <PageContainer className="pt-3 pb-3 sm:pt-6 sm:pb-8">
+      <SectionTitle className="mb-2 sm:mb-4">LeetCode Progress</SectionTitle>
       {hasLeetCode && !editingLeetCode ? (
         <>
           <LeetCodeStatsCard
@@ -83,15 +83,15 @@ export function CandidateDashboardPage() {
         </div>
       )}
 
-      <SectionTitle className="mt-6 sm:mt-10">Get Started</SectionTitle>
-      <div className="grid grid-cols-3 gap-3 sm:gap-4 sm:grid-cols-2 xl:grid-cols-3 mb-2">
+      <SectionTitle className="mt-4 sm:mt-10 mb-2 sm:mb-4">Get Started</SectionTitle>
+      <div className="grid grid-cols-3 gap-2 sm:gap-4 sm:grid-cols-2 xl:grid-cols-3 mb-2">
         <ActionCard icon={FileText} title="Resume" description="Upload your latest resume" accent="blue" onClick={() => navigate('/candidate/resume')} />
         <ActionCard icon={ShieldCheck} title="Tests" description="Proctored assessments" accent="rose" badge={pendingTests > 0 ? `${pendingTests} pending` : undefined} onClick={() => navigate('/candidate/tests')} />
         <ActionCard icon={BookMarked} title="Practice Sheets" description="Curated sheets for your batch" accent="emerald" onClick={() => navigate('/candidate/practice-sheets')} />
       </div>
 
-      <SectionTitle className="mt-6 sm:mt-10">Interview Preparation</SectionTitle>
-      <div className="grid grid-cols-3 gap-3 sm:gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <SectionTitle className="mt-4 sm:mt-10 mb-2 sm:mb-4">Interview Preparation</SectionTitle>
+      <div className="grid grid-cols-4 gap-2 sm:gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <ActionCard icon={MessageSquare} title="PI Questions" description="Personal interview practice" accent="purple" onClick={() => navigate('/candidate/practice/pi')} />
         <ActionCard icon={Users2} title="GD Questions" description="Group discussion topics" accent="amber" onClick={() => navigate('/candidate/practice/gd')} />
         <ActionCard icon={Calculator} title="Aptitude & Reasoning" description="Quant and logical reasoning" accent="green" onClick={() => navigate('/candidate/practice/aptitude')} />
