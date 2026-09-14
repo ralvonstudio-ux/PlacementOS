@@ -2,10 +2,8 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FileText, MessageSquare, Users2, Calculator, Building2, BookMarked, ShieldCheck } from 'lucide-react';
 import { PageContainer } from '@/components/workspace/PageContainer';
-import { WorkspaceHeader } from '@/components/workspace/WorkspaceHeader';
 import { SectionTitle } from '@/components/ui/SectionTitle';
 import { ActionCard } from '@/components/ui/ActionCard';
-import { useAuth } from '@/features/auth/hooks/useAuth';
 import { useMyTests } from '@/features/tests/hooks/useTests';
 import { useMyProfile, useMyLeetCodeStats, useSaveMyProfile } from '@/features/candidate-profile/hooks/useCandidateProfile';
 import { LeetCodeStatsCard } from '@/features/candidate-profile/components/LeetCodeStatsCard';
@@ -13,7 +11,6 @@ import { extractErrorMessage } from '@/services/api';
 
 export function CandidateDashboardPage() {
   const navigate = useNavigate();
-  const { user } = useAuth();
   const { data: tests = [] } = useMyTests();
   const pendingTests = tests.filter((t) => t.attemptStatus !== 'submitted').length;
   const { data: profile } = useMyProfile();
@@ -38,9 +35,7 @@ export function CandidateDashboardPage() {
   }
 
   return (
-    <PageContainer>
-      <WorkspaceHeader title={`Welcome${user ? `, ${user.firstName}` : ''}`} subtitle="Everything you need to get placement-ready" />
-
+    <PageContainer className="pt-4 sm:pt-6">
       <SectionTitle>LeetCode Progress</SectionTitle>
       {hasLeetCode && !editingLeetCode ? (
         <>
@@ -52,6 +47,7 @@ export function CandidateDashboardPage() {
             errorMessage={extractErrorMessage(leetFetchError)}
             isFetching={leetFetching}
             onRefresh={() => refetchLeet()}
+            compact
           />
           <button
             onClick={() => setEditingLeetCode(true)}
@@ -61,7 +57,7 @@ export function CandidateDashboardPage() {
           </button>
         </>
       ) : (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-6">
           <p className="text-sm text-gray-500 mb-3">Link your LeetCode account to track your solved-question stats right here.</p>
           <div className="flex items-center gap-3">
             <input
@@ -87,14 +83,14 @@ export function CandidateDashboardPage() {
         </div>
       )}
 
-      <SectionTitle className="mt-10">Get Started</SectionTitle>
+      <SectionTitle className="mt-6 sm:mt-10">Get Started</SectionTitle>
       <div className="grid grid-cols-3 gap-3 sm:gap-4 sm:grid-cols-2 xl:grid-cols-3 mb-2">
         <ActionCard icon={FileText} title="Resume" description="Upload your latest resume" accent="blue" onClick={() => navigate('/candidate/resume')} />
         <ActionCard icon={ShieldCheck} title="Tests" description="Proctored assessments" accent="rose" badge={pendingTests > 0 ? `${pendingTests} pending` : undefined} onClick={() => navigate('/candidate/tests')} />
         <ActionCard icon={BookMarked} title="Practice Sheets" description="Curated sheets for your batch" accent="emerald" onClick={() => navigate('/candidate/practice-sheets')} />
       </div>
 
-      <SectionTitle className="mt-10">Interview Preparation</SectionTitle>
+      <SectionTitle className="mt-6 sm:mt-10">Interview Preparation</SectionTitle>
       <div className="grid grid-cols-3 gap-3 sm:gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <ActionCard icon={MessageSquare} title="PI Questions" description="Personal interview practice" accent="purple" onClick={() => navigate('/candidate/practice/pi')} />
         <ActionCard icon={Users2} title="GD Questions" description="Group discussion topics" accent="amber" onClick={() => navigate('/candidate/practice/gd')} />
