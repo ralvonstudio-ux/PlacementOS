@@ -12,7 +12,6 @@ const HOME_PATHS = new Set(['/candidate', '/faculty', '/tpo', '/admin']);
 const WORKSPACE_LABELS: Record<string, string> = {
   '/faculty': 'Trainer Workspace',
   '/tpo': 'TPO Dashboard',
-  '/candidate': 'Student Portal',
   '/settings': 'Settings',
 };
 
@@ -104,7 +103,9 @@ export const Topbar = ({ onMenuToggle }: TopbarProps) => {
 
   const ROLE_LABELS: Record<string, string> = { faculty: 'Trainer', tpo: 'TPO', candidate: 'Student' };
 
-  const section = getLabel(location.pathname);
+  // Students get their first name here instead of a generic "Student Portal"
+  // label — a more personal touch than a fixed section name.
+  const section = user?.role === 'candidate' ? user.firstName : getLabel(location.pathname);
   const now = useNow();
   const date = formatDate(now);
   const time = formatTime(now);
