@@ -90,8 +90,8 @@ export function LeetCodeStatsCard({ username, stats, isLoading, isError, errorMe
   const weeks = useMemo(() => (stats ? buildWeeks(stats.submissionCalendar) : []), [stats]);
 
   return (
-    <div className={cn('bg-white rounded-2xl border border-gray-100 shadow-sm', compact ? 'p-4 sm:p-6' : 'p-6')}>
-      <div className="flex items-start justify-between mb-4 sm:mb-5">
+    <div className={cn('bg-white rounded-2xl border border-gray-100 shadow-sm', compact ? 'p-3 sm:p-6' : 'p-6')}>
+      <div className={cn('flex items-start justify-between', compact ? 'mb-3 sm:mb-5' : 'mb-5')}>
         <div>
           <div className="flex items-center gap-2">
             <span className="relative flex h-2 w-2">
@@ -117,7 +117,7 @@ export function LeetCodeStatsCard({ username, stats, isLoading, isError, errorMe
         <p className="text-sm text-red-600">{errorMessage}</p>
       ) : stats ? (
         <>
-          <div className={cn('flex items-center flex-wrap', compact ? 'gap-4' : 'gap-6')}>
+          <div className={cn('flex items-center flex-wrap', compact ? 'gap-3 sm:gap-6' : 'gap-6')}>
             <RingChart stats={stats} compact={compact} />
             <div className="flex-1 min-w-[140px] space-y-1.5 sm:space-y-2">
               <DifficultyRow label="Easy" solved={stats.easySolved} total={stats.easyTotal} accent="text-emerald-600" />
