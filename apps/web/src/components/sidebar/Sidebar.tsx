@@ -22,6 +22,10 @@ import {
   Code2,
   ClipboardCheck,
   CalendarClock,
+  Grid3x3,
+  Clock,
+  UserCog,
+  Upload,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
@@ -57,9 +61,17 @@ const NAV_SECTION_TPO_ACADEMICS = [
   { label: 'Question Bank Overview', icon: Library, path: '/tpo/question-bank-overview', end: false },
 ] as const;
 
+const NAV_SECTION_TPO_TIMETABLE = [
+  { label: 'Timetable', icon: CalendarClock, path: '/tpo/timetable', end: true },
+  { label: 'Master Grid', icon: Grid3x3, path: '/tpo/timetable/master-grid', end: false },
+  { label: 'Bell Schedule', icon: Clock, path: '/tpo/timetable/periods', end: false },
+  { label: 'Substitutes', icon: UserCog, path: '/tpo/timetable/substitutes', end: false },
+] as const;
+
 const NAV_SECTION_TPO_STAFF = [
   { label: 'Trainers', icon: Users, path: '/tpo/faculty', end: false },
   { label: 'Students', icon: Users2, path: '/tpo/candidates', end: false },
+  { label: 'Data Import', icon: Upload, path: '/tpo/import', end: false },
 ] as const;
 
 const NAV_SECTION_TPO_TESTS = [
@@ -67,10 +79,17 @@ const NAV_SECTION_TPO_TESTS = [
   { label: 'Practice Library', icon: BookMarked, path: '/tpo/practice', end: false },
 ] as const;
 
+const NAV_SECTION_ADMIN = [
+  { label: 'Dashboard', icon: LayoutDashboard, path: '/admin', end: true },
+  { label: 'Faculty', icon: Users, path: '/admin/faculty', end: false },
+  { label: 'Candidates', icon: Users2, path: '/admin/candidates', end: false },
+] as const;
+
 const NAV_SECTIONS_TPO = [
   { title: 'Overview', items: NAV_SECTION_TPO_OVERVIEW },
   { title: 'Approvals', items: NAV_SECTION_TPO_APPROVALS },
   { title: 'Academics', items: NAV_SECTION_TPO_ACADEMICS },
+  { title: 'Timetable', items: NAV_SECTION_TPO_TIMETABLE },
   { title: 'Assessment', items: NAV_SECTION_TPO_TESTS },
   { title: 'Staff & Students', items: NAV_SECTION_TPO_STAFF },
 ] as const;
@@ -90,6 +109,7 @@ const NAV_ITEMS_CANDIDATE = [
 const ROLE_LABEL: Record<string, string> = {
   faculty: 'Trainer',
   tpo: 'TPO',
+  admin: 'Admin',
   candidate: 'Student',
 };
 
@@ -107,6 +127,7 @@ export const Sidebar = ({ isOpen, onClose, overlayOnDesktop }: SidebarProps) => 
   const displayName = user ? `${user.firstName} ${user.lastName}` : 'Loading…';
   const roleLabel = user ? (ROLE_LABEL[user.role] ?? user.role) : '';
   const isTpo = user?.role === 'tpo';
+  const isAdmin = user?.role === 'admin';
   const isCandidate = user?.role === 'candidate';
 
   return (
@@ -145,7 +166,22 @@ export const Sidebar = ({ isOpen, onClose, overlayOnDesktop }: SidebarProps) => 
       </div>
 
       <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-0.5">
-        {isTpo ? (
+        {isAdmin ? (
+          <>
+            <p className="px-3 pb-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Admin Portal</p>
+            {NAV_SECTION_ADMIN.map((item) => (
+              <SidebarNavItem key={item.path} to={item.path} icon={item.icon} label={item.label} end={item.end} />
+            ))}
+            <p className="px-3 pb-1 pt-5 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Also Available — TPO Workspace</p>
+            {NAV_SECTIONS_TPO.map((section) => (
+              <div key={section.title}>
+                {section.items.map((item) => (
+                  <SidebarNavItem key={item.path} to={item.path} icon={item.icon} label={item.label} end={item.end} />
+                ))}
+              </div>
+            ))}
+          </>
+        ) : isTpo ? (
           <>
             <p className="px-3 pb-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">TPO Portal</p>
             {NAV_SECTIONS_TPO.map((section, idx) => (

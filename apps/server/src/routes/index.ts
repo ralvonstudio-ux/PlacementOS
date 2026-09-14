@@ -19,6 +19,7 @@ import practiceRoutes from '../features/practice/practice.routes';
 import testRoutes from '../features/tests/test.routes';
 import contentExtractionRoutes from '../features/content-extraction/content-extraction.routes';
 import academicPlanRoutes from '../features/academic-plan/academic-plan.routes';
+import importRoutes from '../features/import/import.routes';
 
 const router = Router();
 
@@ -43,5 +44,6 @@ router.use('/practice', practiceRoutes);
 router.use('/tests', testRoutes);
 router.use('/content-extraction', contentExtractionRoutes);
 router.use('/academic-plan', academicPlanRoutes);
+router.use('/import', importRoutes);
 
 export default router;
