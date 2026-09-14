@@ -60,9 +60,12 @@ export function BatchAttendancePage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F5F5F7] p-3 sm:p-6">
+    // Fixed to exactly the space AppLayout gives this page — only the roster list
+    // inside SwipeAttendanceDeck scrolls; this page itself never does, so the header,
+    // stat cards, toolbar and Save button all stay in view the whole time.
+    <div className="h-full flex flex-col overflow-hidden bg-[#F5F5F7] p-3 sm:p-6">
       {/* Header */}
-      <div className="flex items-center gap-3 mb-3 sm:mb-4">
+      <div className="flex items-center gap-3 mb-3 sm:mb-4 shrink-0">
         <button
           onClick={() => navigate('/faculty/batches')}
           className="p-2 rounded-lg hover:bg-white border border-transparent hover:border-gray-200 transition-colors shrink-0"
@@ -76,7 +79,7 @@ export function BatchAttendancePage() {
       </div>
 
       {/* Date navigator */}
-      <div className="flex items-center justify-between gap-3 mb-4 sm:mb-6 bg-white border border-gray-200 rounded-xl px-2 py-2">
+      <div className="flex items-center justify-between gap-3 mb-4 sm:mb-6 bg-white border border-gray-200 rounded-xl px-2 py-2 shrink-0 shadow-sm">
         <button
           onClick={() => goToDate(shiftDate(date, -1))}
           aria-label="Previous day"
@@ -96,7 +99,7 @@ export function BatchAttendancePage() {
       </div>
 
       {isToday ? (
-        <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-5" style={{ minHeight: '60vh' }}>
+        <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-5 flex-1 min-h-0 flex flex-col">
           {isLoading ? (
             <div className="space-y-3 animate-pulse">
               {Array.from({ length: 8 }).map((_, i) => (
@@ -120,7 +123,7 @@ export function BatchAttendancePage() {
         </div>
       ) : (
         // Past/future dates are view-only — the server only accepts marking today's date.
-        <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-5" style={{ minHeight: '60vh' }}>
+        <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-5 flex-1 min-h-0 overflow-y-auto">
           <p className="text-xs text-gray-400 mb-4">
             {date > today ? "Future date — nothing recorded yet." : 'Past attendance is view-only.'}
           </p>
