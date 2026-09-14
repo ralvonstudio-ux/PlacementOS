@@ -1,6 +1,14 @@
 import bcrypt from 'bcrypt';
 import { testRepository, testAttemptRepository } from './test.repository';
-import { createTestSchema, updateTestSchema, startTestSchema, submitAnswerSchema, logViolationSchema } from './test.validation';
+import {
+  createTestSchema,
+  updateTestSchema,
+  startTestSchema,
+  submitAnswerSchema,
+  logViolationSchema,
+  generateTestDraftSchema,
+  reviewTestSchema,
+} from './test.validation';
 import { ITest, ITestAttempt } from './test.model';
 import { NotFoundError, ValidationError, ForbiddenError } from '../../middlewares/errorHandler';
 import { AuthContext } from '../../lib/auth-context';
@@ -8,6 +16,7 @@ import { candidateRepository } from '../candidates/candidate.repository';
 import { resolveCandidateId } from '../candidates/candidate.service';
 import { notificationRepository } from '../notifications/notification.repository';
 import { assertFacultyCanAccessQuestionBank } from '../training-schedule/training-schedule.service';
+import { testGeneratorService } from './test-generator.service';
 import type {
   Test as TestApiShape,
   TestForCandidate,
@@ -29,6 +38,13 @@ const toTestApiShape = (t: ITest): TestApiShape => ({
   violationLimit: t.violationLimit,
   status: t.status,
   scheduledAt: t.scheduledAt ? new Date(t.scheduledAt).toISOString() : undefined,
+  contentName: t.contentName,
+  topic: t.topic,
+  aiGenerated: t.aiGenerated,
+  aiReview: t.aiReview,
+  reviewNote: t.reviewNote,
+  reviewedBy: t.reviewedBy,
+  reviewedAt: t.reviewedAt ? new Date(t.reviewedAt).toISOString() : undefined,
   createdBy: t.createdBy,
   createdAt: new Date(t.createdAt).toISOString(),
   updatedAt: new Date(t.updatedAt).toISOString(),
@@ -118,13 +134,66 @@ export const testService = {
     return toTestApiShape(test);
   },
 
+  /** AI-drafts a full test from uploaded/pasted content — saved straight away as a
+   *  draft (not just returned) so the faculty member can edit it like any other test
+   *  before submitting it for approval. */
+  async generateDraft(rawInput: unknown, ctx: AuthContext): Promise<TestApiShape> {
+    const input = generateTestDraftSchema.parse(rawInput);
+    if (ctx.role === 'faculty') await assertFacultyCanAccessQuestionBank(ctx, input.batch, input.track ?? '');
+
+    const { questions, aiReview } = await testGeneratorService.generateDraft(input);
+
+    const test = await testRepository.create(ctx.instituteId, ctx.userId, {
+      title: input.title,
+      batch: input.batch,
+      track: input.track,
+      questions,
+      durationMinutes: input.durationMinutes,
+      violationLimit: input.violationLimit,
+      contentName: input.contentName,
+      topic: input.topic,
+      sourceContent: input.sourceContent,
+      aiGenerated: true,
+      aiReview,
+    });
+    return toTestApiShape(test);
+  },
+
   async update(id: string, rawInput: unknown, ctx: AuthContext): Promise<TestApiShape> {
     const data = updateTestSchema.parse(rawInput);
     const existing = await testRepository.findById(id, ctx.instituteId);
     if (!existing) throw new NotFoundError('Test');
-    if (existing.status !== 'draft') throw new ValidationError('Only a draft test can be edited');
+    if (existing.status !== 'draft' && existing.status !== 'rejected') {
+      throw new ValidationError('Only a draft or rejected test can be edited');
+    }
 
-    const updated = await testRepository.update(id, ctx.instituteId, data);
+    // Editing a rejected test moves it back to draft — it needs to be resubmitted.
+    const patch = existing.status === 'rejected' ? { ...data, status: 'draft' as const } : data;
+    const updated = await testRepository.update(id, ctx.instituteId, patch);
+    if (!updated) throw new NotFoundError('Test');
+    return toTestApiShape(updated);
+  },
+
+  /** Faculty action: draft/rejected -> pending_approval, for a TPO/admin to review. */
+  async submitForApproval(id: string, ctx: AuthContext): Promise<TestApiShape> {
+    const existing = await testRepository.findById(id, ctx.instituteId);
+    if (!existing) throw new NotFoundError('Test');
+    if (existing.status !== 'draft' && existing.status !== 'rejected') {
+      throw new ValidationError('Only a draft or rejected test can be submitted for approval');
+    }
+    const updated = await testRepository.update(id, ctx.instituteId, { status: 'pending_approval' } as never);
+    if (!updated) throw new NotFoundError('Test');
+    return toTestApiShape(updated);
+  },
+
+  /** TPO/admin action: pending_approval -> approved or rejected. */
+  async review(id: string, rawInput: unknown, ctx: AuthContext): Promise<TestApiShape> {
+    const { decision, reviewNote } = reviewTestSchema.parse(rawInput);
+    const existing = await testRepository.findById(id, ctx.instituteId);
+    if (!existing) throw new NotFoundError('Test');
+    if (existing.status !== 'pending_approval') throw new ValidationError('Only a test pending approval can be reviewed');
+
+    const updated = await testRepository.review(id, ctx.instituteId, { status: decision, reviewNote, reviewedBy: ctx.userId, reviewedAt: new Date() });
     if (!updated) throw new NotFoundError('Test');
     return toTestApiShape(updated);
   },
@@ -132,6 +201,7 @@ export const testService = {
   async publish(id: string, ctx: AuthContext): Promise<TestApiShape> {
     const existing = await testRepository.findById(id, ctx.instituteId);
     if (!existing) throw new NotFoundError('Test');
+    if (existing.status !== 'approved') throw new ValidationError('Only an approved test can be published');
     const updated = await testRepository.update(id, ctx.instituteId, { status: 'published' } as never);
     if (!updated) throw new NotFoundError('Test');
 
@@ -147,9 +217,13 @@ export const testService = {
     return toTestApiShape(updated);
   },
 
+  /** Faculty see only their own tests (drafts/pending/etc. from other faculty aren't
+   *  theirs to browse); TPO/admin see everything, since approval requires seeing every
+   *  faculty member's pending submissions. */
   async list(ctx: AuthContext, batch?: string): Promise<TestApiShape[]> {
     const tests = await testRepository.findAll(ctx.instituteId, batch);
-    return tests.map(toTestApiShape);
+    const scoped = ctx.role === 'faculty' ? tests.filter((t) => t.createdBy === ctx.userId) : tests;
+    return scoped.map(toTestApiShape);
   },
 
   async remove(id: string, ctx: AuthContext): Promise<void> {

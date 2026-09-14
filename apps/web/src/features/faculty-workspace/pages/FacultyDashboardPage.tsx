@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { ClipboardCheck, CalendarOff, Sparkles, Library, FileCheck2 } from 'lucide-react';
+import { ClipboardCheck, CalendarOff, Sparkles, Library, FileCheck2, ShieldCheck } from 'lucide-react';
 import { PageContainer } from '@/components/workspace/PageContainer';
 import { WorkspaceHeader } from '@/components/workspace/WorkspaceHeader';
 import { SectionTitle } from '@/components/ui/SectionTitle';
@@ -74,10 +74,10 @@ export function FacultyDashboardPage() {
         />
         <ActionCard
           icon={Sparkles}
-          title="Training Plan"
-          description="Generate and manage this week's plan"
+          title="Academic Plan"
+          description="Put in the syllabus, get a week-by-week plan"
           accent="purple"
-          onClick={() => navigate('/faculty/training-plan')}
+          onClick={() => navigate('/faculty/academic-plan')}
         />
         <ActionCard
           icon={Library}
@@ -92,6 +92,13 @@ export function FacultyDashboardPage() {
           description="Generate a practice worksheet"
           accent="emerald"
           onClick={() => navigate('/faculty/worksheets')}
+        />
+        <ActionCard
+          icon={ShieldCheck}
+          title="Tests"
+          description="AI-draft a test and send it for approval"
+          accent="blue"
+          onClick={() => navigate('/faculty/tests')}
         />
         <ActionCard
           icon={CalendarOff}

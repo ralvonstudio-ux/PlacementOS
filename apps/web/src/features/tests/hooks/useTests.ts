@@ -1,6 +1,13 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { testsApi } from '../api/tests.api';
-import type { CreateTestPayload, StartTestPayload, SubmitAnswerPayload, LogViolationPayload } from '@placementos/types';
+import type {
+  CreateTestPayload,
+  StartTestPayload,
+  GenerateTestDraftPayload,
+  ReviewTestPayload,
+  SubmitAnswerPayload,
+  LogViolationPayload,
+} from '@placementos/types';
 
 export const testKeys = {
   all: ['tests'] as const,
@@ -16,6 +23,38 @@ export const useCreateTest = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (payload: CreateTestPayload) => testsApi.create(payload),
+    onSuccess: () => qc.invalidateQueries({ queryKey: testKeys.all }),
+  });
+};
+
+export const useGenerateTestDraft = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: GenerateTestDraftPayload) => testsApi.generateDraft(payload),
+    onSuccess: () => qc.invalidateQueries({ queryKey: testKeys.all }),
+  });
+};
+
+export const useUpdateTest = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: Partial<CreateTestPayload> }) => testsApi.update(id, payload),
+    onSuccess: () => qc.invalidateQueries({ queryKey: testKeys.all }),
+  });
+};
+
+export const useSubmitTestForApproval = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => testsApi.submitForApproval(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: testKeys.all }),
+  });
+};
+
+export const useReviewTest = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: ReviewTestPayload }) => testsApi.review(id, payload),
     onSuccess: () => qc.invalidateQueries({ queryKey: testKeys.all }),
   });
 };

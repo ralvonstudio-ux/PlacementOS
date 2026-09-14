@@ -28,6 +28,14 @@ export const testRepository = {
     return Test.findOneAndUpdate({ _id: id, instituteId, isDeleted: false }, { $set }, { new: true });
   },
 
+  async review(
+    id: string,
+    instituteId: string,
+    data: { status: 'approved' | 'rejected'; reviewNote?: string; reviewedBy: string; reviewedAt: Date }
+  ): Promise<ITest | null> {
+    return Test.findOneAndUpdate({ _id: id, instituteId, isDeleted: false }, { $set: data }, { new: true });
+  },
+
   async softDelete(id: string, instituteId: string): Promise<boolean> {
     const res = await Test.updateOne({ _id: id, instituteId, isDeleted: false }, { $set: { isDeleted: true, deletedAt: new Date() } });
     return res.modifiedCount > 0;

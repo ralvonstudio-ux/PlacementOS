@@ -17,6 +17,7 @@ const FacultyBatchesPage = lazy(() => import('@/features/faculty-workspace/pages
 const FacultyAttendancePage = lazy(() => import('@/features/attendance/pages/FacultyAttendancePage').then((m) => ({ default: m.FacultyAttendancePage })));
 const BatchAttendancePage = lazy(() => import('@/features/attendance/pages/BatchAttendancePage').then((m) => ({ default: m.BatchAttendancePage })));
 const BatchRosterPage = lazy(() => import('@/features/attendance/pages/BatchRosterPage').then((m) => ({ default: m.BatchRosterPage })));
+const AcademicPlanPage = lazy(() => import('@/features/academic-plan/pages/AcademicPlanPage').then((m) => ({ default: m.AcademicPlanPage })));
 const MyLeaveRequestsPage = lazy(() => import('@/features/leave-requests/pages/MyLeaveRequestsPage').then((m) => ({ default: m.MyLeaveRequestsPage })));
 const FacultyTrainingPlanPage = lazy(() => import('@/features/training-plan/pages/FacultyTrainingPlanPage').then((m) => ({ default: m.FacultyTrainingPlanPage })));
 const QuestionBankLandingPage = lazy(() => import('@/features/question-bank/pages/QuestionBankLandingPage').then((m) => ({ default: m.QuestionBankLandingPage })));
@@ -26,6 +27,9 @@ const PaperPreviewPage = lazy(() => import('@/features/question-bank/pages/Paper
 const PapersListPage = lazy(() => import('@/features/question-bank/pages/PapersListPage').then((m) => ({ default: m.PapersListPage })));
 const WorksheetsPage = lazy(() => import('@/features/worksheet-generator/pages/WorksheetsPage').then((m) => ({ default: m.WorksheetsPage })));
 const FacultyProfilePage = lazy(() => import('@/features/faculty-workspace/pages/FacultyProfilePage').then((m) => ({ default: m.FacultyProfilePage })));
+const FacultyTestsPage = lazy(() => import('@/features/tests/pages/TpoTestsPage').then((m) => ({ default: m.TpoTestsPage })));
+const FacultyTestBuilderPage = lazy(() => import('@/features/tests/pages/TestBuilderPage').then((m) => ({ default: m.TestBuilderPage })));
+const FacultyTestReviewPage = lazy(() => import('@/features/tests/pages/TestReviewPage').then((m) => ({ default: m.TestReviewPage })));
 
 // ── Admin pages ────────────────────────────────────────────────────────────
 const AdminDashboardPage = lazy(() => import('@/features/admin/pages/AdminDashboardPage').then((m) => ({ default: m.AdminDashboardPage })));
@@ -119,6 +123,10 @@ export const router = createBrowserRouter([
                   { path: 'question-bank/papers/generate', element: <PaperGeneratorPage /> },
                   { path: 'question-bank/papers/:id', element: <PaperPreviewPage /> },
                   { path: 'worksheets', element: <WorksheetsPage /> },
+                  { path: 'academic-plan', element: <AcademicPlanPage /> },
+                  { path: 'tests', element: <FacultyTestsPage /> },
+                  { path: 'tests/new', element: <FacultyTestBuilderPage /> },
+                  { path: 'tests/:id/review', element: <FacultyTestReviewPage /> },
                   { path: 'profile', element: <FacultyProfilePage /> },
                 ],
               },

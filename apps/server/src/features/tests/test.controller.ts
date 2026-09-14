@@ -12,11 +12,35 @@ export const testController = {
     } catch (err) { next(err); }
   },
 
+  async generateDraft(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const ctx = buildAuthContext(req.user!, req.ip ?? undefined);
+      const test = await testService.generateDraft(req.body, ctx);
+      sendCreated(res, test, 'Test drafted');
+    } catch (err) { next(err); }
+  },
+
   async update(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const ctx = buildAuthContext(req.user!, req.ip ?? undefined);
       const test = await testService.update(req.params.id, req.body, ctx);
       sendSuccess(res, test, 'Test updated');
+    } catch (err) { next(err); }
+  },
+
+  async submitForApproval(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const ctx = buildAuthContext(req.user!, req.ip ?? undefined);
+      const test = await testService.submitForApproval(req.params.id, ctx);
+      sendSuccess(res, test, 'Submitted for approval');
+    } catch (err) { next(err); }
+  },
+
+  async review(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const ctx = buildAuthContext(req.user!, req.ip ?? undefined);
+      const test = await testService.review(req.params.id, req.body, ctx);
+      sendSuccess(res, test, `Test ${test.status}`);
     } catch (err) { next(err); }
   },
 

@@ -22,12 +22,38 @@ export const createTestSchema = z.object({
   violationLimit: z.number().int().min(1).default(3),
   /** Optional — blocks `start` until this instant even once the test is published. */
   scheduledAt: z.coerce.date().optional(),
+  contentName: z.string().trim().optional(),
+  topic: z.string().trim().optional(),
+  sourceContent: z.string().optional(),
+  aiGenerated: z.boolean().optional(),
+  aiReview: z.string().optional(),
 });
 
 export const updateTestSchema = createTestSchema.partial();
 
 export const startTestSchema = z.object({
   accessCode: z.string().trim().min(1, 'Enter the access code from your notification'),
+});
+
+export const generateTestDraftSchema = z.object({
+  title: z.string({ required_error: 'title is required' }).min(1).trim(),
+  batch: z.string({ required_error: 'batch is required' }).min(1).trim(),
+  track: z.string().trim().optional(),
+  contentName: z.string({ required_error: 'contentName is required' }).min(1).trim(),
+  topic: z.string({ required_error: 'topic is required' }).min(1).trim(),
+  sourceContent: z.string({ required_error: 'sourceContent is required' }).trim().min(20, 'Paste or upload more content — that looks too short to generate from.'),
+  mcqCount: z.number().int().min(0).max(100),
+  shortAnswerCount: z.number().int().min(0).max(100),
+  durationMinutes: z.number().int().min(1),
+  violationLimit: z.number().int().min(1).default(3),
+}).refine((v) => v.mcqCount + v.shortAnswerCount > 0, {
+  message: 'Ask for at least one question (MCQ or short answer)',
+  path: ['mcqCount'],
+});
+
+export const reviewTestSchema = z.object({
+  decision: z.enum(['approved', 'rejected']),
+  reviewNote: z.string().trim().max(1000).optional(),
 });
 
 export const submitAnswerSchema = z.object({
@@ -54,5 +80,7 @@ export const logViolationSchema = z.object({
 export type CreateTestInput = z.infer<typeof createTestSchema>;
 export type UpdateTestInput = z.infer<typeof updateTestSchema>;
 export type StartTestInput = z.infer<typeof startTestSchema>;
+export type GenerateTestDraftInput = z.infer<typeof generateTestDraftSchema>;
+export type ReviewTestInput = z.infer<typeof reviewTestSchema>;
 export type SubmitAnswerInput = z.infer<typeof submitAnswerSchema>;
 export type LogViolationInput = z.infer<typeof logViolationSchema>;
