@@ -28,9 +28,29 @@ export const testRepository = {
     return Test.findOneAndUpdate({ _id: id, instituteId, isDeleted: false }, { $set }, { new: true });
   },
 
+  async review(
+    id: string,
+    instituteId: string,
+    data: { status: 'approved' | 'rejected'; reviewNote?: string; reviewedBy: string; reviewedAt: Date }
+  ): Promise<ITest | null> {
+    return Test.findOneAndUpdate({ _id: id, instituteId, isDeleted: false }, { $set: data }, { new: true });
+  },
+
   async softDelete(id: string, instituteId: string): Promise<boolean> {
     const res = await Test.updateOne({ _id: id, instituteId, isDeleted: false }, { $set: { isDeleted: true, deletedAt: new Date() } });
     return res.modifiedCount > 0;
+  },
+
+  /** Atomically claims "issue the access code for this test" — the filter only matches a
+   *  test that hasn't been issued one yet, so two concurrent callers (e.g. two candidates'
+   *  requests racing to activate the same just-opened test) can't both win and double-notify
+   *  the batch. Returns the updated test only to the caller that actually won the race. */
+  async claimAccessCodeIssuance(id: string, instituteId: string, accessCodeHash: string): Promise<ITest | null> {
+    return Test.findOneAndUpdate(
+      { _id: id, instituteId, accessCodeIssuedAt: { $exists: false } },
+      { $set: { accessCodeHash, accessCodeIssuedAt: new Date() } },
+      { new: true }
+    );
   },
 };
 

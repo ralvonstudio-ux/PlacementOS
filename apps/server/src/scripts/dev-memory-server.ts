@@ -35,6 +35,8 @@ async function main() {
   const { User } = await import('../features/users/user.model');
   const { Faculty } = await import('../features/faculty/faculty.model');
   const { Candidate } = await import('../features/candidates/candidate.model');
+  const { PeriodSlot } = await import('../features/training-schedule/training-schedule.period.model');
+  const { TrainingScheduleEntry } = await import('../features/training-schedule/training-schedule.model');
 
   await connectDatabase();
 
@@ -47,7 +49,7 @@ async function main() {
 
   const passwordHash = await bcrypt.hash(DEMO_PASSWORD, SALT_ROUNDS);
 
-  await User.create({
+  const admin = await User.create({
     firstName: 'Ada',
     lastName: 'Admin',
     email: 'admin@demo.edu',
@@ -55,6 +57,7 @@ async function main() {
     role: 'admin',
     instituteId,
   });
+  const adminId = String(admin._id);
 
   await User.create({
     firstName: 'Priya',
@@ -108,6 +111,26 @@ async function main() {
     role: 'candidate',
     instituteId,
   });
+
+  const slotDefs = [
+    { name: 'Period 1', startTime: '09:00', endTime: '10:00' },
+    { name: 'Period 2', startTime: '10:00', endTime: '11:00' },
+    { name: 'Break', startTime: '11:00', endTime: '11:15', isBreak: true },
+    { name: 'Period 3', startTime: '11:15', endTime: '12:15' },
+    { name: 'Period 4', startTime: '12:15', endTime: '13:15' },
+  ];
+  const slots = await Promise.all(
+    slotDefs.map((s, orderIndex) =>
+      PeriodSlot.create({ instituteId, orderIndex, daysApplicable: [1, 2, 3, 4, 5, 6], createdBy: adminId, ...s })
+    )
+  );
+
+  const facultyId = String(faculty._id);
+  await TrainingScheduleEntry.create([
+    { instituteId, batch: '2026-CSE', track: 'DSA', facultyId, dayOfWeek: 1, startTime: '09:00', endTime: '10:00', room: 'Lab 1', placementYear: '2026', slotId: String(slots[0]._id), createdBy: adminId },
+    { instituteId, batch: '2026-CSE', track: 'Aptitude', facultyId, dayOfWeek: 1, startTime: '10:00', endTime: '11:00', room: 'Room 204', placementYear: '2026', slotId: String(slots[1]._id), createdBy: adminId },
+    { instituteId, batch: '2026-CSE', track: 'DSA', facultyId, dayOfWeek: 3, startTime: '11:15', endTime: '12:15', room: 'Lab 1', placementYear: '2026', slotId: String(slots[3]._id), createdBy: adminId },
+  ]);
 
   // eslint-disable-next-line no-console
   console.log('[demo] seeded institute + 4 logins (admin/tpo/faculty/candidate), password for all: ' + DEMO_PASSWORD);

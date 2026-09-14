@@ -51,6 +51,16 @@ export const trainingScheduleRepository = {
     return TrainingScheduleEntry.find({ instituteId, facultyId, isDeleted: false }).lean<ITrainingScheduleEntry[]>();
   },
 
+  /** Unpaginated — backs the master grid and conflict scan, which both need
+   *  every entry for a placement year in memory at once. */
+  async findAllForPlacementYear(instituteId: string, placementYear: string): Promise<ITrainingScheduleEntry[]> {
+    return TrainingScheduleEntry.find({ instituteId, placementYear, isDeleted: false }).lean<ITrainingScheduleEntry[]>();
+  },
+
+  async findByIds(ids: string[], instituteId: string): Promise<ITrainingScheduleEntry[]> {
+    return TrainingScheduleEntry.find({ _id: { $in: ids }, instituteId, isDeleted: false });
+  },
+
   async update(id: string, instituteId: string, data: Partial<ITrainingScheduleEntry>): Promise<ITrainingScheduleEntry | null> {
     return TrainingScheduleEntry.findOneAndUpdate({ _id: id, instituteId, isDeleted: false }, { $set: data }, { new: true });
   },

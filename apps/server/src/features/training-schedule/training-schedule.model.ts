@@ -10,6 +10,7 @@ export interface ITrainingScheduleEntry extends Document {
   endTime: string; // HH:mm
   room?: string;
   placementYear: string;
+  slotId?: string;
   isDeleted: boolean;
   deletedAt?: Date;
   deletedBy?: string;
@@ -30,6 +31,7 @@ const trainingScheduleSchema = new Schema<ITrainingScheduleEntry>(
     endTime: { type: String, required: true, trim: true },
     room: { type: String, trim: true },
     placementYear: { type: String, required: true, trim: true },
+    slotId: { type: String },
     isDeleted: { type: Boolean, default: false },
     deletedAt: { type: Date },
     deletedBy: { type: String },

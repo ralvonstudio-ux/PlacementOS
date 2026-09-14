@@ -5,7 +5,7 @@ import { bankQuestionRepository } from '../question-bank/bank-question.repositor
 import { assertFacultyCanAccessQuestionBank } from '../training-schedule/training-schedule.service';
 import { worksheetRepository, WorksheetListOptions } from './worksheet.repository';
 import { IWorksheet } from './worksheet.model';
-import { worksheetGeneratorService, GenerateWorksheetInput } from './worksheet-generator.service';
+import { worksheetGeneratorService, GenerateWorksheetInput, GenerateWorksheetFromContentInput } from './worksheet-generator.service';
 import { SaveWorksheetInput, UpdateWorksheetInput } from './worksheet.validation';
 import { resolveQuestionImages } from '../question-bank/image-resolution';
 import type { ResolvedQuestionImage } from '@placementos/types';
@@ -17,8 +17,39 @@ export const worksheetService = {
     return worksheetGeneratorService.generate(input, ctx);
   },
 
+  /** Content-driven mode — never persists, just returns the AI's draft + its own review
+   *  for the faculty member to read before editing and calling save(). */
+  async generateFromContent(input: GenerateWorksheetFromContentInput, ctx: AuthContext) {
+    await assertFacultyCanAccessQuestionBank(ctx, input.batch, input.track);
+    return worksheetGeneratorService.generateFromContent(input, ctx);
+  },
+
   async save(data: SaveWorksheetInput, ctx: AuthContext): Promise<IWorksheet> {
     await assertFacultyCanAccessQuestionBank(ctx, data.batch, data.track);
+
+    if (data.sourceType === 'content_upload') {
+      // A content-driven worksheet still needs a TrainingModuleRecord to hang off of
+      // (the module list is how faculty browse their saved worksheets elsewhere), so
+      // find-or-create one using the module name the faculty already gave it — same
+      // pattern the image/PDF question-bank upload flow uses.
+      const module_ = await trainingModuleRecordRepository.findOrCreate(ctx.instituteId, data.batch, data.track, data.moduleName!);
+      return worksheetRepository.create({
+        instituteId: ctx.instituteId,
+        facultyId: ctx.userId,
+        batch: data.batch,
+        track: data.track,
+        trainingModuleIds: [String(module_._id)],
+        trainingModuleNames: [module_.moduleName],
+        worksheetType: data.worksheetType,
+        title: data.title,
+        questions: data.questions.map((q) => ({ ...q, options: q.options ?? undefined, isNew: undefined })),
+        sourceType: 'content_upload',
+        sourceContent: data.sourceContent,
+        aiReview: data.aiReview,
+        createdBy: ctx.userId,
+      });
+    }
+
     const modules = await trainingModuleRecordRepository.findByIds(ctx.instituteId, data.trainingModuleIds);
     if (modules.length === 0) throw new ValidationError('No matching training modules found');
 

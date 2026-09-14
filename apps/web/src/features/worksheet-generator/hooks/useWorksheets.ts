@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { worksheetApi } from '../api/worksheet.api';
-import type { GenerateWorksheetPayload, SaveWorksheetPayload, WorksheetListOptions } from '@placementos/types';
+import type { GenerateWorksheetPayload, GenerateWorksheetFromContentPayload, SaveWorksheetPayload, WorksheetListOptions } from '@placementos/types';
 
 export const worksheetKeys = {
   all: ['worksheets'] as const,
@@ -16,6 +16,9 @@ export const useWorksheet = (id: string) =>
 
 export const useGenerateWorksheet = () =>
   useMutation({ mutationFn: (payload: GenerateWorksheetPayload) => worksheetApi.generate(payload) });
+
+export const useGenerateWorksheetFromContent = () =>
+  useMutation({ mutationFn: (payload: GenerateWorksheetFromContentPayload) => worksheetApi.generateFromContent(payload) });
 
 export const useSaveWorksheet = () => {
   const qc = useQueryClient();

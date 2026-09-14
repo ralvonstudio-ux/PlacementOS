@@ -26,6 +26,9 @@ export interface CreateWorksheetData {
   worksheetType: WorksheetType;
   title: string;
   questions: IWorksheetQuestion[];
+  sourceType?: 'module_bank' | 'content_upload';
+  sourceContent?: string;
+  aiReview?: string;
   createdBy: string;
 }
 

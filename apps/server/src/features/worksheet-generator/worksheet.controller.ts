@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { buildAuthContext } from '../../lib/auth-context';
 import { sendSuccess, sendCreated, sendPaginated } from '../../lib/response';
 import { worksheetService } from './worksheet.service';
-import { generateWorksheetSchema, saveWorksheetSchema, listWorksheetsSchema, updateWorksheetSchema } from './worksheet.validation';
+import { generateWorksheetSchema, generateWorksheetFromContentSchema, saveWorksheetSchema, listWorksheetsSchema, updateWorksheetSchema } from './worksheet.validation';
 
 export const worksheetController = {
   /** POST /worksheet-generator/generate — pulls from the bank + AI-fills any shortfall, never saved */
@@ -11,6 +11,16 @@ export const worksheetController = {
       const input = generateWorksheetSchema.parse(req.body);
       const ctx = buildAuthContext(req.user!);
       const result = await worksheetService.generate(input, ctx);
+      sendSuccess(res, result, 'Worksheet drafted');
+    } catch (err) { next(err); }
+  },
+
+  /** POST /worksheet-generator/generate-from-content — fully AI-authored from pasted/uploaded content, never saved */
+  async generateFromContent(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const input = generateWorksheetFromContentSchema.parse(req.body);
+      const ctx = buildAuthContext(req.user!);
+      const result = await worksheetService.generateFromContent(input, ctx);
       sendSuccess(res, result, 'Worksheet drafted');
     } catch (err) { next(err); }
   },

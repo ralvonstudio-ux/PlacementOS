@@ -135,8 +135,141 @@ export interface TrainingScheduleEntry {
   endTime: string;
   room?: string;
   placementYear: string;
+  /** Period slot this entry was placed in, when entered via the timetable grid.
+   *  Freeform entries (created before period slots existed, or via the API
+   *  directly) may leave this unset — startTime/endTime remain the source of truth. */
+  slotId?: string;
   createdAt: string;
   updatedAt: string;
+  /** Joined in on grid/master-grid responses. */
+  facultyName?: string;
+}
+
+// ── Timetable period slots (institute-wide bell schedule) ─────────────────
+export interface PeriodSlot {
+  _id: string;
+  instituteId: string;
+  name: string;
+  orderIndex: number;
+  startTime: string;
+  endTime: string;
+  isBreak: boolean;
+  daysApplicable: number[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreatePeriodSlotPayload {
+  name: string;
+  startTime: string;
+  endTime: string;
+  isBreak?: boolean;
+  daysApplicable?: number[];
+}
+
+export type UpdatePeriodSlotPayload = Partial<CreatePeriodSlotPayload>;
+
+// ── Timetable conflicts ────────────────────────────────────────────────────
+export interface ConflictInfo {
+  type: 'faculty_double_booked' | 'room_double_booked';
+  dayOfWeek: number;
+  slotId?: string;
+  startTime: string;
+  endTime: string;
+  entryIds: string[];
+  facultyId?: string;
+  facultyName?: string;
+  room?: string;
+  message: string;
+}
+
+// ── Timetable master grid (whole-institute view) ───────────────────────────
+export interface MasterGridQuery {
+  placementYear: string;
+  batch?: string;
+}
+
+export interface MasterGridCell {
+  dayOfWeek: number;
+  slotId: string;
+  batch: string;
+  entry?: TrainingScheduleEntry;
+}
+
+export interface MasterGridResponse {
+  slots: PeriodSlot[];
+  batches: string[];
+  cells: MasterGridCell[];
+  conflicts: ConflictInfo[];
+}
+
+export interface SetMasterGridCellPayload {
+  batch: string;
+  track: string;
+  facultyId: string;
+  dayOfWeek: number;
+  slotId: string;
+  placementYear: string;
+  room?: string;
+  /** Existing entry id to update instead of creating a new one — pass when
+   *  editing a cell that's already filled. */
+  entryId?: string;
+}
+
+// ── Timetable substitutes ──────────────────────────────────────────────────
+export type SubstituteStatus = 'pending' | 'assigned' | 'cancelled';
+
+export interface TimetableSubstitute {
+  _id: string;
+  instituteId: string;
+  date: string;
+  entryId: string;
+  originalFacultyId: string;
+  substituteFacultyId?: string;
+  reason?: string;
+  status: SubstituteStatus;
+  createdBy?: string;
+  createdAt: string;
+  updatedAt: string;
+  /** Joined in on list/needs-substitute responses. */
+  originalFacultyName?: string;
+  substituteFacultyName?: string;
+  batch?: string;
+  track?: string;
+  dayOfWeek?: number;
+  startTime?: string;
+  endTime?: string;
+}
+
+export interface CreateSubstitutePayload {
+  date: string;
+  entryId: string;
+  reason?: string;
+  substituteFacultyId?: string;
+}
+
+export interface UpdateSubstitutePayload {
+  substituteFacultyId?: string;
+  status?: SubstituteStatus;
+  reason?: string;
+}
+
+/** A schedule entry on a given date whose faculty is on approved leave and
+ *  has no substitute assigned yet — backs the "Needs Substitute" worklist. */
+export interface NeedsSubstituteEntry {
+  date: string;
+  entry: TrainingScheduleEntry;
+  facultyName: string;
+  leaveRequestId: string;
+}
+
+export interface SubstituteSuggestion {
+  facultyId: string;
+  facultyName: string;
+  /** True when this faculty already teaches the same track (best-fit first). */
+  sameTrack: boolean;
+  /** True when the faculty has no other entry in this day/slot. */
+  available: boolean;
 }
 
 // ── Training Plan (was Academic Plan) ────────────────────────────────────
@@ -767,6 +900,7 @@ export interface InstituteSettings {
 // ── Worksheet Generator (rich domain) ─────────────────────────────────────────
 
 export type GeneratedWorksheetType = 'practice' | 'homework' | 'revision' | 'hots' | 'olympiad' | 'remedial';
+export type WorksheetSourceType = 'module_bank' | 'content_upload';
 
 export interface BankWorksheetQuestion {
   questionId?: string;
@@ -793,6 +927,9 @@ export interface GeneratedWorksheet {
   worksheetType: GeneratedWorksheetType;
   title: string;
   questions: BankWorksheetQuestion[];
+  sourceType?: WorksheetSourceType;
+  sourceContent?: string;
+  aiReview?: string;
   createdBy: string;
   resolvedImages?: Record<string, ResolvedQuestionImage>;
   createdAt: string;
@@ -809,10 +946,25 @@ export interface GenerateWorksheetPayload {
   includeImages?: boolean;
 }
 
+export interface GenerateWorksheetFromContentPayload {
+  batch: string;
+  track: string;
+  moduleName: string;
+  contentText: string;
+  worksheetType: GeneratedWorksheetType;
+  questionCount: number;
+  languageComplexity?: LanguageComplexity;
+}
+
 export interface WorksheetDraft {
   config: GenerateWorksheetPayload;
   questions: BankWorksheetQuestion[];
   resolvedImages?: Record<string, ResolvedQuestionImage>;
+}
+
+export interface WorksheetFromContentDraft {
+  questions: BankWorksheetQuestion[];
+  aiReview: string;
 }
 
 export interface SaveWorksheetPayload {
@@ -823,6 +975,10 @@ export interface SaveWorksheetPayload {
   title: string;
   questions: BankWorksheetQuestion[];
   addNewToBank: boolean;
+  sourceType?: WorksheetSourceType;
+  moduleName?: string;
+  sourceContent?: string;
+  aiReview?: string;
 }
 
 export interface WorksheetListOptions {
@@ -1305,9 +1461,53 @@ export interface CreatePracticeSheetPayload {
   questionIds: string[];
 }
 
+// ── Data Import (bulk CSV/Excel upload with AI-assisted column mapping) ────
+export type ImportType = 'training-schedule' | 'faculty' | 'candidates';
+export type ImportStatus = 'mapping' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'rolled_back';
+export type ImportRowStatus = 'pending' | 'valid' | 'invalid' | 'duplicate' | 'created' | 'skipped';
+export type DuplicateStrategy = 'skip' | 'overwrite' | 'create';
+
+export interface ImportField {
+  field: string;
+  label: string;
+  required: boolean;
+  description?: string;
+}
+
+export type ImportTemplates = Record<ImportType, ImportField[]>;
+
+export interface ImportRow {
+  rowNumber: number;
+  raw: Record<string, string>;
+  mapped: Record<string, unknown>;
+  errors: string[];
+  status: ImportRowStatus;
+  entityId?: string;
+}
+
+export interface ImportSession {
+  _id: string;
+  instituteId: string;
+  importType: ImportType;
+  originalFileName: string;
+  totalRows: number;
+  status: ImportStatus;
+  rawHeaders: string[];
+  columnMapping: Record<string, string>;
+  duplicateStrategy: DuplicateStrategy;
+  rows: ImportRow[];
+  createdEntityIds: string[];
+  errorMessage?: string;
+  createdBy: string;
+  confirmedAt?: string;
+  rolledBackAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // ── Proctored Tests ────────────────────────────────────────────────────────
 
-export type TestStatus = 'draft' | 'published' | 'closed';
+export type TestStatus = 'draft' | 'pending_approval' | 'approved' | 'rejected' | 'published' | 'closed';
 export type TestQuestionType = 'mcq' | 'short_answer';
 
 /** A question as frozen into a Test at creation time — deliberately a snapshot,
@@ -1336,6 +1536,16 @@ export interface Test {
   /** Number of proctoring violations tolerated before an attempt auto-submits. */
   violationLimit: number;
   status: TestStatus;
+  /** Optional — the test can't be started before this time, even once published. */
+  scheduledAt?: string;
+  /** Set only when the test was AI-drafted from uploaded/pasted content. */
+  contentName?: string;
+  topic?: string;
+  aiGenerated?: boolean;
+  aiReview?: string;
+  reviewNote?: string;
+  reviewedBy?: string;
+  reviewedAt?: string;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
@@ -1348,6 +1558,25 @@ export interface CreateTestPayload {
   questions: TestQuestionSnapshot[];
   durationMinutes: number;
   violationLimit: number;
+  scheduledAt?: string;
+}
+
+export interface GenerateTestDraftPayload {
+  title: string;
+  batch: string;
+  track?: string;
+  contentName: string;
+  topic: string;
+  sourceContent: string;
+  mcqCount: number;
+  shortAnswerCount: number;
+  durationMinutes: number;
+  violationLimit: number;
+}
+
+export interface ReviewTestPayload {
+  decision: 'approved' | 'rejected';
+  reviewNote?: string;
 }
 
 /** What a candidate sees in their test list / when starting one. */
@@ -1360,8 +1589,11 @@ export interface TestForCandidate {
   durationMinutes: number;
   violationLimit: number;
   questionCount: number;
+  scheduledAt?: string;
   /** Set once the candidate has an attempt in progress or submitted for this test. */
   attemptStatus?: TestAttemptStatus;
+  /** Set once the candidate's attempt has been scored (i.e. submitted). */
+  score?: number;
 }
 
 export type TestAttemptStatus = 'in_progress' | 'submitted';
@@ -1433,4 +1665,87 @@ export interface TestAttemptReview {
   attempt: TestAttempt;
   candidateName: string;
   test: Test;
+}
+
+export interface StartTestPayload {
+  /** The one-time code issued in the candidate's notification when the test opened. */
+  accessCode: string;
+}
+
+// ── Notifications ────────────────────────────────────────────────────────────
+
+export type NotificationType = 'test_access_code';
+
+export interface Notification {
+  _id: string;
+  type: NotificationType;
+  title: string;
+  body: string;
+  relatedTestId?: string;
+  readAt?: string;
+  createdAt: string;
+}
+
+// ── Academic Plan (syllabus-driven, distinct from module-based Training Plan) ────
+
+export type AcademicPlanSessionStatus = 'planned' | 'completed' | 'skipped';
+
+export interface AcademicPlanSession {
+  lectureNumber: number;
+  week: number;
+  date: string;
+  title: string;
+  description?: string;
+  status: AcademicPlanSessionStatus;
+  manuallyEdited?: boolean;
+}
+
+export interface AcademicPlan {
+  _id: string;
+  instituteId: string;
+  facultyId: string;
+  batch: string;
+  track: string;
+  title: string;
+  syllabusText: string;
+  totalLectures: number;
+  totalWeeks: number;
+  startDate: string;
+  sessions: AcademicPlanSession[];
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GenerateAcademicPlanPayload {
+  batch: string;
+  track: string;
+  title?: string;
+  syllabusText: string;
+  totalLectures: number;
+  totalWeeks: number;
+  startDate?: string;
+}
+
+export interface EditAcademicPlanSessionPayload {
+  lectureNumber: number;
+  title?: string;
+  description?: string;
+  week?: number;
+  date?: string;
+  status?: AcademicPlanSessionStatus;
+}
+
+export interface AddAcademicPlanSessionPayload {
+  title: string;
+  description?: string;
+  week: number;
+  date: string;
+}
+
+// ── Shared content extraction (paste-or-upload, used by Academic Plan / Worksheet / Test) ──
+
+export interface ExtractContentResult {
+  text: string;
+  fileName?: string;
 }

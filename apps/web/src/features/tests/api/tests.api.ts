@@ -3,8 +3,11 @@ import type {
   ApiResponse,
   Test,
   CreateTestPayload,
+  GenerateTestDraftPayload,
+  ReviewTestPayload,
   TestForCandidate,
   StartTestAttemptResult,
+  StartTestPayload,
   TestAttempt,
   SubmitAnswerPayload,
   LogViolationPayload,
@@ -27,6 +30,34 @@ export const testsApi = {
     try {
       const res = await apiClient.get<ApiResponse<Test[]>>(BASE, { params: batch ? { batch } : {} });
       return res.data.data ?? [];
+    } catch (err) { throw new Error(extractErrorMessage(err)); }
+  },
+
+  async generateDraft(payload: GenerateTestDraftPayload): Promise<Test> {
+    try {
+      const res = await apiClient.post<ApiResponse<Test>>(`${BASE}/generate-draft`, payload);
+      return res.data.data!;
+    } catch (err) { throw new Error(extractErrorMessage(err)); }
+  },
+
+  async update(id: string, payload: Partial<CreateTestPayload>): Promise<Test> {
+    try {
+      const res = await apiClient.patch<ApiResponse<Test>>(`${BASE}/${id}`, payload);
+      return res.data.data!;
+    } catch (err) { throw new Error(extractErrorMessage(err)); }
+  },
+
+  async submitForApproval(id: string): Promise<Test> {
+    try {
+      const res = await apiClient.patch<ApiResponse<Test>>(`${BASE}/${id}/submit-for-approval`);
+      return res.data.data!;
+    } catch (err) { throw new Error(extractErrorMessage(err)); }
+  },
+
+  async review(id: string, payload: ReviewTestPayload): Promise<Test> {
+    try {
+      const res = await apiClient.patch<ApiResponse<Test>>(`${BASE}/${id}/review`, payload);
+      return res.data.data!;
     } catch (err) { throw new Error(extractErrorMessage(err)); }
   },
 
@@ -65,9 +96,9 @@ export const testsApi = {
     } catch (err) { throw new Error(extractErrorMessage(err)); }
   },
 
-  async start(testId: string): Promise<StartTestAttemptResult> {
+  async start(testId: string, payload: StartTestPayload): Promise<StartTestAttemptResult> {
     try {
-      const res = await apiClient.post<ApiResponse<StartTestAttemptResult>>(`${BASE}/${testId}/start`);
+      const res = await apiClient.post<ApiResponse<StartTestAttemptResult>>(`${BASE}/${testId}/start`, payload);
       return res.data.data!;
     } catch (err) { throw new Error(extractErrorMessage(err)); }
   },
