@@ -418,6 +418,11 @@ export interface ChangePasswordPayload {
   newPassword: string;
 }
 
+export interface UpdateMePayload {
+  firstName?: string;
+  lastName?: string;
+}
+
 // ── Question Bank (rich domain) ───────────────────────────────────────────
 // The stub Question/QuestionType/QuestionSource/QuestionPaper/Worksheet types above stay as-is
 // (additive-only rule) — the real question-bank feature needs a considerably richer shape (AI

@@ -4,7 +4,7 @@ import { User } from '../users/user.model';
 import { userRepository } from '../users/user.repository';
 import { tokenService, AccessTokenPayload } from './token.service';
 import { UnauthorizedError, ValidationError } from '../../middlewares/errorHandler';
-import { loginSchema, changePasswordSchema, registerSchema } from '../users/user.validation';
+import { loginSchema, changePasswordSchema, registerSchema, updateMeSchema } from '../users/user.validation';
 import { logger } from '../../lib/logger';
 
 const SALT_ROUNDS = 12;
@@ -144,6 +144,16 @@ export const authService = {
       lastName: user.lastName,
       lastLoginAt: user.lastLoginAt,
     };
+  },
+
+  /** Self-service — the signed-in user renaming their own account (first/last name only). */
+  async updateMe(userId: string, instituteId: string, rawInput: unknown): Promise<AccessTokenPayload & { lastLoginAt?: Date }> {
+    const data = updateMeSchema.parse(rawInput);
+    const updated = await userRepository.update(userId, instituteId, data);
+    if (!updated) throw new UnauthorizedError('User not found');
+
+    logger.info('Profile updated', { userId, fields: Object.keys(data) });
+    return this.me(userId);
   },
 
   async changePassword(userId: string, rawInput: unknown): Promise<void> {

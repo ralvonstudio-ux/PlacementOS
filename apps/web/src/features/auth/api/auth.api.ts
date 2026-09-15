@@ -1,5 +1,5 @@
 import { apiClient, extractErrorMessage, ApiError } from '@/services/api';
-import type { ApiResponse, LoginPayload, LoginResponse, AuthUser, ChangePasswordPayload } from '@placementos/types';
+import type { ApiResponse, LoginPayload, LoginResponse, AuthUser, ChangePasswordPayload, UpdateMePayload } from '@placementos/types';
 
 export const authApi = {
   async login(payload: LoginPayload): Promise<LoginResponse> {
@@ -46,6 +46,15 @@ export const authApi = {
   async changePassword(payload: ChangePasswordPayload): Promise<void> {
     try {
       await apiClient.post('/auth/change-password', payload);
+    } catch (err) {
+      throw new Error(extractErrorMessage(err));
+    }
+  },
+
+  async updateMe(payload: UpdateMePayload): Promise<AuthUser> {
+    try {
+      const res = await apiClient.patch<ApiResponse<AuthUser>>('/auth/me', payload);
+      return res.data.data!;
     } catch (err) {
       throw new Error(extractErrorMessage(err));
     }
