@@ -26,9 +26,11 @@ export interface CreateWorksheetData {
   worksheetType: WorksheetType;
   title: string;
   questions: IWorksheetQuestion[];
-  sourceType?: 'module_bank' | 'content_upload';
+  sourceType?: 'module_bank' | 'content_upload' | 'photo_upload';
   sourceContent?: string;
   aiReview?: string;
+  attachmentUrl?: string;
+  attachmentFileName?: string;
   createdBy: string;
 }
 
@@ -63,12 +65,17 @@ export const worksheetRepository = {
     return Worksheet.findOne({ _id: id, instituteId, isDeleted: false }).lean<IWorksheet>();
   },
 
+  /** Candidate-facing: every worksheet saved for their own batch, across every track/faculty. */
+  async findForBatch(instituteId: string, batch: string): Promise<IWorksheet[]> {
+    return Worksheet.find({ instituteId, batch, isDeleted: false }).sort({ createdAt: -1 }).lean<IWorksheet[]>();
+  },
+
   async softDelete(id: string, instituteId: string): Promise<boolean> {
     const res = await Worksheet.updateOne({ _id: id, instituteId, isDeleted: false }, { $set: { isDeleted: true, deletedAt: new Date() } });
     return res.modifiedCount > 0;
   },
 
-  async update(id: string, instituteId: string, patch: { title?: string; questions?: IWorksheetQuestion[] }): Promise<IWorksheet | null> {
+  async update(id: string, instituteId: string, patch: { title?: string; questions?: IWorksheetQuestion[]; attachmentUrl?: string; attachmentFileName?: string }): Promise<IWorksheet | null> {
     return Worksheet.findOneAndUpdate({ _id: id, instituteId, isDeleted: false }, { $set: patch }, { new: true }).lean<IWorksheet>();
   },
 };

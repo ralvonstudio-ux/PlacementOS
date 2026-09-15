@@ -15,7 +15,7 @@ export interface IWorksheetQuestion {
   imageRequirement?: IBankQuestionImageRequirement;
 }
 
-export type WorksheetSourceType = 'module_bank' | 'content_upload';
+export type WorksheetSourceType = 'module_bank' | 'content_upload' | 'photo_upload';
 
 export interface IWorksheet extends Document {
   instituteId: string;
@@ -34,6 +34,9 @@ export interface IWorksheet extends Document {
   sourceContent?: string;
   /** AI's own short review of the draft (coverage, balance, suggestions) — content_upload only. */
   aiReview?: string;
+  /** photo_upload only — the uploaded file's URL and original name. */
+  attachmentUrl?: string;
+  attachmentFileName?: string;
   createdBy: string;
   isDeleted: boolean;
   deletedAt?: Date;
@@ -76,9 +79,11 @@ const worksheetSchema = new Schema<IWorksheet>(
     worksheetType: { type: String, enum: WORKSHEET_TYPES, required: true },
     title: { type: String, required: true, trim: true },
     questions: { type: [worksheetQuestionSchema], default: [] },
-    sourceType: { type: String, enum: ['module_bank', 'content_upload'], default: 'module_bank' },
+    sourceType: { type: String, enum: ['module_bank', 'content_upload', 'photo_upload'], default: 'module_bank' },
     sourceContent: { type: String },
     aiReview: { type: String },
+    attachmentUrl: { type: String },
+    attachmentFileName: { type: String },
     createdBy: { type: String, required: true },
     isDeleted: { type: Boolean, default: false },
     deletedAt: { type: Date },

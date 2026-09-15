@@ -6,8 +6,12 @@ import { assertFacultyCanAccessQuestionBank } from '../training-schedule/trainin
 import { worksheetRepository, WorksheetListOptions } from './worksheet.repository';
 import { IWorksheet } from './worksheet.model';
 import { worksheetGeneratorService, GenerateWorksheetInput, GenerateWorksheetFromContentInput } from './worksheet-generator.service';
-import { SaveWorksheetInput, UpdateWorksheetInput } from './worksheet.validation';
+import { SaveWorksheetInput, UpdateWorksheetInput, UploadWorksheetInput } from './worksheet.validation';
 import { resolveQuestionImages } from '../question-bank/image-resolution';
+import { r2Storage } from '../../lib/r2-storage';
+import { fileToDataUri } from '../../lib/image-upload';
+import { resolveCandidateId } from '../candidates/candidate.service';
+import { candidateRepository } from '../candidates/candidate.repository';
 import type { ResolvedQuestionImage } from '@placementos/types';
 
 export const worksheetService = {
@@ -107,6 +111,57 @@ export const worksheetService = {
     });
   },
 
+  /** "I already have this worksheet on paper" — a photo or PDF of an existing sheet, attached
+   *  as-is with no AI authoring. Listed and downloadable exactly like a generated one. */
+  async saveFromAttachment(
+    file: { buffer: Buffer; mimetype: string; originalname?: string },
+    data: UploadWorksheetInput,
+    ctx: AuthContext
+  ): Promise<IWorksheet> {
+    await assertFacultyCanAccessQuestionBank(ctx, data.batch, data.track);
+
+    const attachmentUrl = r2Storage.isConfigured()
+      ? (await r2Storage.uploadToR2(file.buffer, file.mimetype, 'worksheets', ctx.instituteId)).url
+      : fileToDataUri(file as Express.Multer.File);
+
+    return worksheetRepository.create({
+      instituteId: ctx.instituteId,
+      facultyId: ctx.userId,
+      batch: data.batch,
+      track: data.track,
+      trainingModuleIds: [],
+      trainingModuleNames: [],
+      worksheetType: data.worksheetType,
+      title: data.title,
+      questions: [],
+      sourceType: 'photo_upload',
+      attachmentUrl,
+      attachmentFileName: file.originalname,
+      createdBy: ctx.userId,
+    });
+  },
+
+  /** Candidate-facing: every worksheet saved for their own batch. */
+  async listMine(ctx: AuthContext): Promise<IWorksheet[]> {
+    const candidateId = await resolveCandidateId(ctx);
+    const candidate = await candidateRepository.findById(candidateId, ctx.instituteId);
+    if (!candidate) throw new NotFoundError('Candidate');
+    return worksheetRepository.findForBatch(ctx.instituteId, candidate.batch);
+  },
+
+  /** Candidate-facing: one worksheet, only if it's for their own batch. */
+  async getMineById(id: string, ctx: AuthContext): Promise<IWorksheet & { resolvedImages: Record<string, ResolvedQuestionImage> }> {
+    const candidateId = await resolveCandidateId(ctx);
+    const candidate = await candidateRepository.findById(candidateId, ctx.instituteId);
+    if (!candidate) throw new NotFoundError('Candidate');
+
+    const worksheet = await worksheetRepository.findById(id, ctx.instituteId);
+    if (!worksheet || worksheet.batch !== candidate.batch) throw new NotFoundError('Worksheet');
+
+    const resolvedImages = await resolveQuestionImages(worksheet.questions, ctx.instituteId);
+    return { ...worksheet, resolvedImages } as IWorksheet & { resolvedImages: Record<string, ResolvedQuestionImage> };
+  },
+
   /** When batch+track are given, this lists everything saved for that batch/track (not just this
    *  faculty member's own). With no batch/track, falls back to "my worksheets". */
   async list(query: WorksheetListOptions, ctx: AuthContext) {
@@ -150,6 +205,7 @@ export const worksheetService = {
       patch.questions = existing.questions.map((q, i) => ({
         ...q,
         questionText: data.questions![i].questionText,
+        options: data.questions![i].options ?? undefined,
         difficulty: data.questions![i].difficulty,
         estimatedTimeMinutes: data.questions![i].estimatedTimeMinutes,
       }));
