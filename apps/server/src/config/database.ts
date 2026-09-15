@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import { env } from './env';
 import { logger } from '../lib/logger';
+import { Candidate } from '../features/candidates/candidate.model';
 
 // Caches the in-flight connect() promise so every caller — the eager call at
 // module load, and the per-request middleware in app.ts that awaits this
@@ -38,6 +39,21 @@ export const connectDatabase = async (): Promise<void> => {
           host: mongoose.connection.host,
           db: mongoose.connection.name,
         });
+
+        // One-time self-heal: candidate.model.ts's `{instituteId, loginEmail}` unique
+        // index has a partialFilterExpression (only enforce uniqueness when loginEmail
+        // is actually set), but a deploy from before that fix left the OLD plain unique
+        // index sitting on production — Mongoose's autoIndex only ever creates missing
+        // indexes, never drops/replaces a conflicting one. That stale index rejects
+        // every candidate past the first with no loginEmail as a "duplicate null" key
+        // error. syncIndexes() reconciles the live indexes with the schema (dropping
+        // ones no longer declared, creating ones that are) — safe to run on every
+        // connect since it's a no-op once the indexes already match.
+        try {
+          await Candidate.syncIndexes();
+        } catch (error) {
+          logger.warn('Candidate index sync failed — leaving existing indexes as-is', { error });
+        }
 
         mongoose.connection.on('disconnected', () => {
           logger.warn('MongoDB disconnected — retrying automatically');
