@@ -13,7 +13,7 @@ const FACULTY_TABS = [
   { label: 'History', icon: History, path: '/faculty/attendance', end: false },
   // No dedicated faculty timetable view exists yet — the day-by-day training
   // plan is the closest schedule-shaped page until one is built.
-  { label: 'Timetable', icon: CalendarClock, path: '/faculty/training-plan', end: false },
+  { label: 'Planner', icon: CalendarClock, path: '/faculty/training-plan', end: false },
   { label: 'Messages', icon: MessageSquare, path: '/messages', end: false },
 ] as const;
 
