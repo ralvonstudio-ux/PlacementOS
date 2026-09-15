@@ -94,9 +94,12 @@ function ProfileMenu({ displayName, roleLabel, onClose }: { displayName: string;
 
 interface TopbarProps {
   onMenuToggle: () => void;
+  /** Faculty on mobile navigates via the bottom tab bar instead — the
+   *  sidebar it would otherwise open isn't rendered there at all. */
+  hideMenuButton?: boolean;
 }
 
-export const Topbar = ({ onMenuToggle }: TopbarProps) => {
+export const Topbar = ({ onMenuToggle, hideMenuButton }: TopbarProps) => {
   const location = useLocation();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -138,13 +141,15 @@ export const Topbar = ({ onMenuToggle }: TopbarProps) => {
   return (
     <header className="sticky top-0 z-10 flex h-[60px] items-center border-b px-4 sm:px-8 bg-white border-[#E8E8E8]">
       <div className="flex items-center w-full gap-2 sm:gap-4 max-w-7xl mx-auto">
-        <button
-          onClick={onMenuToggle}
-          className="p-2 -ml-1 rounded-xl transition-colors lg:hidden text-gray-500 hover:bg-violet-50 hover:text-violet-700"
-          aria-label="Toggle navigation"
-        >
-          <Menu className="w-5 h-5" />
-        </button>
+        {!hideMenuButton && (
+          <button
+            onClick={onMenuToggle}
+            className="p-2 -ml-1 rounded-xl transition-colors lg:hidden text-gray-500 hover:bg-violet-50 hover:text-violet-700"
+            aria-label="Toggle navigation"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+        )}
 
         {showBack && (
           <button
