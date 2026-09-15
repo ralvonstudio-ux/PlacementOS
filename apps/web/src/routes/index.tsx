@@ -26,6 +26,7 @@ const PaperGeneratorPage = lazyWithReload(() => import('@/features/question-bank
 const PaperPreviewPage = lazyWithReload(() => import('@/features/question-bank/pages/PaperPreviewPage').then((m) => ({ default: m.PaperPreviewPage })), 'PaperPreviewPage');
 const PapersListPage = lazyWithReload(() => import('@/features/question-bank/pages/PapersListPage').then((m) => ({ default: m.PapersListPage })), 'PapersListPage');
 const WorksheetsPage = lazyWithReload(() => import('@/features/worksheet-generator/pages/WorksheetsPage').then((m) => ({ default: m.WorksheetsPage })), 'WorksheetsPage');
+const WorksheetDetailPage = lazyWithReload(() => import('@/features/worksheet-generator/pages/WorksheetDetailPage').then((m) => ({ default: m.WorksheetDetailPage })), 'WorksheetDetailPage');
 const FacultyProfilePage = lazyWithReload(() => import('@/features/faculty-workspace/pages/FacultyProfilePage').then((m) => ({ default: m.FacultyProfilePage })), 'FacultyProfilePage');
 const FacultyTestsPage = lazyWithReload(() => import('@/features/tests/pages/TpoTestsPage').then((m) => ({ default: m.TpoTestsPage })), 'TpoTestsPage');
 const FacultyTestBuilderPage = lazyWithReload(() => import('@/features/tests/pages/TestBuilderPage').then((m) => ({ default: m.TestBuilderPage })), 'TestBuilderPage');
@@ -65,6 +66,7 @@ const CandidateDashboardPage = lazyWithReload(() => import('@/features/candidate
 const ResumeBuilderPage = lazyWithReload(() => import('@/features/candidate-profile/pages/ResumeBuilderPage').then((m) => ({ default: m.ResumeBuilderPage })), 'ResumeBuilderPage');
 const PracticeBrowsePage = lazyWithReload(() => import('@/features/practice/pages/PracticeBrowsePage').then((m) => ({ default: m.PracticeBrowsePage })), 'PracticeBrowsePage');
 const CandidatePracticeSheetsPage = lazyWithReload(() => import('@/features/practice/pages/CandidatePracticeSheetsPage').then((m) => ({ default: m.CandidatePracticeSheetsPage })), 'CandidatePracticeSheetsPage');
+const CandidateWorksheetsPage = lazyWithReload(() => import('@/features/worksheet-generator/pages/CandidateWorksheetsPage').then((m) => ({ default: m.CandidateWorksheetsPage })), 'CandidateWorksheetsPage');
 const TestListPage = lazyWithReload(() => import('@/features/tests/pages/TestListPage').then((m) => ({ default: m.TestListPage })), 'TestListPage');
 const TestTakingPage = lazyWithReload(() => import('@/features/tests/pages/TestTakingPage').then((m) => ({ default: m.TestTakingPage })), 'TestTakingPage');
 
@@ -121,6 +123,7 @@ export const router = createBrowserRouter([
                   { path: 'question-bank/papers/generate', element: <PaperGeneratorPage /> },
                   { path: 'question-bank/papers/:id', element: <PaperPreviewPage /> },
                   { path: 'worksheets', element: <WorksheetsPage /> },
+                  { path: 'worksheets/:id', element: <WorksheetDetailPage /> },
                   { path: 'training-plan', element: <AcademicPlanPage /> },
                   { path: 'tests', element: <FacultyTestsPage /> },
                   { path: 'tests/new', element: <FacultyTestBuilderPage /> },
@@ -174,6 +177,7 @@ export const router = createBrowserRouter([
                   { path: 'leetcode', element: <Navigate to="/candidate" replace /> },
                   { path: 'practice/:category', element: <PracticeBrowsePage /> },
                   { path: 'practice-sheets', element: <CandidatePracticeSheetsPage /> },
+                  { path: 'worksheets', element: <CandidateWorksheetsPage /> },
                   { path: 'tests', element: <TestListPage /> },
                 ],
               },

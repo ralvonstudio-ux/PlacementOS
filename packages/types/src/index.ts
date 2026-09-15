@@ -866,7 +866,9 @@ export interface InstituteSettings {
 // ── Worksheet Generator (rich domain) ─────────────────────────────────────────
 
 export type GeneratedWorksheetType = 'practice' | 'homework' | 'revision' | 'hots' | 'olympiad' | 'remedial';
-export type WorksheetSourceType = 'module_bank' | 'content_upload';
+/** 'photo_upload' is a faculty member's own worksheet, attached as-is (a photo or PDF of a
+ *  physical sheet they already have) — no AI authoring involved, just digitized and shared. */
+export type WorksheetSourceType = 'module_bank' | 'content_upload' | 'photo_upload';
 
 export interface BankWorksheetQuestion {
   questionId?: string;
@@ -896,10 +898,23 @@ export interface GeneratedWorksheet {
   sourceType?: WorksheetSourceType;
   sourceContent?: string;
   aiReview?: string;
+  /** photo_upload only — the uploaded file's URL and original name. */
+  attachmentUrl?: string;
+  attachmentFileName?: string;
   createdBy: string;
   resolvedImages?: Record<string, ResolvedQuestionImage>;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface UpdateWorksheetPayload {
+  title?: string;
+  questions?: {
+    questionText: string;
+    options?: string[] | null;
+    difficulty: QuestionDifficulty;
+    estimatedTimeMinutes: number;
+  }[];
 }
 
 export interface GenerateWorksheetPayload {

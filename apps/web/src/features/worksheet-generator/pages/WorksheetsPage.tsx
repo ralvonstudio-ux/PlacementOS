@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
-import { FileCheck2, Sparkles, Save, Loader2, Library, UploadCloud } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { FileCheck2, Sparkles, Save, Loader2, Library, UploadCloud, Camera, Image as ImageIcon, FileText } from 'lucide-react';
 import { PageContainer } from '@/components/workspace/PageContainer';
 import { WorkspaceHeader } from '@/components/workspace/WorkspaceHeader';
 import { SectionTitle } from '@/components/ui/SectionTitle';
@@ -7,7 +8,9 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { ContentSourceInput } from '@/features/content-extraction/components/ContentSourceInput';
 import { useMyBatchTracks } from '@/features/training-schedule/hooks/useTrainingSchedule';
 import { useModules } from '@/features/question-bank/hooks/useQuestionBank';
-import { useGenerateWorksheet, useGenerateWorksheetFromContent, useSaveWorksheet, useWorksheetList } from '../hooks/useWorksheets';
+import {
+  useGenerateWorksheet, useGenerateWorksheetFromContent, useSaveWorksheet, useWorksheetList, useUploadWorksheetAttachment,
+} from '../hooks/useWorksheets';
 import { extractErrorMessage } from '@/services/api';
 import type { GeneratedWorksheetType, WorksheetDraft, WorksheetFromContentDraft } from '@placementos/types';
 
@@ -21,13 +24,14 @@ const WORKSHEET_TYPES: { value: GeneratedWorksheetType; label: string }[] = [
 ];
 
 export function WorksheetsPage() {
+  const navigate = useNavigate();
   const { batchTracks } = useMyBatchTracks();
   const [selected, setSelected] = useState<{ batch: string; track: string } | null>(null);
   useEffect(() => {
     if (!selected && batchTracks.length > 0) setSelected(batchTracks[0]);
   }, [batchTracks, selected]);
 
-  const [source, setSource] = useState<'modules' | 'content'>('modules');
+  const [source, setSource] = useState<'modules' | 'content' | 'photo'>('modules');
   const { data: savedPage } = useWorksheetList(selected ? { batch: selected.batch, track: selected.track, limit: 10 } : {});
 
   return (
@@ -57,9 +61,16 @@ export function WorksheetsPage() {
         <button onClick={() => setSource('content')} className={`inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold rounded-md transition-colors ${source === 'content' ? 'bg-violet-600 text-white' : 'text-gray-500 hover:text-gray-700'}`}>
           <UploadCloud className="w-4 h-4" /> From Content
         </button>
+        <button onClick={() => setSource('photo')} className={`inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold rounded-md transition-colors ${source === 'photo' ? 'bg-violet-600 text-white' : 'text-gray-500 hover:text-gray-700'}`}>
+          <Camera className="w-4 h-4" /> From Photo
+        </button>
       </div>
 
-      {selected && (source === 'modules' ? <FromModulesPanel selected={selected} /> : <FromContentPanel selected={selected} />)}
+      {selected && (
+        source === 'modules' ? <FromModulesPanel selected={selected} /> :
+        source === 'content' ? <FromContentPanel selected={selected} /> :
+        <FromPhotoPanel selected={selected} />
+      )}
 
       <SectionTitle>Saved Worksheets</SectionTitle>
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
@@ -68,21 +79,115 @@ export function WorksheetsPage() {
         ) : (
           <div className="divide-y divide-gray-50">
             {savedPage!.data.map((w) => (
-              <div key={w._id} className="flex items-center gap-4 px-5 py-4">
+              <button
+                key={w._id}
+                onClick={() => navigate(`/faculty/worksheets/${w._id}`)}
+                className="w-full flex items-center gap-4 px-5 py-4 text-left hover:bg-gray-50 transition-colors"
+              >
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-gray-900 truncate flex items-center gap-1.5">
                     {w.title}
                     {w.sourceType === 'content_upload' && <span title="Generated from content"><Sparkles className="w-3.5 h-3.5 text-violet-500 shrink-0" /></span>}
+                    {w.sourceType === 'photo_upload' && <span title="Uploaded worksheet">{w.attachmentFileName?.match(/\.pdf$/i) ? <FileText className="w-3.5 h-3.5 text-violet-500 shrink-0" /> : <ImageIcon className="w-3.5 h-3.5 text-violet-500 shrink-0" />}</span>}
                   </p>
-                  <p className="text-xs text-gray-500">{w.trainingModuleNames.join(', ')} · {w.questions.length} questions</p>
+                  <p className="text-xs text-gray-500">
+                    {w.sourceType === 'photo_upload' ? 'Uploaded worksheet' : `${w.trainingModuleNames.join(', ')} · ${w.questions.length} questions`}
+                  </p>
                 </div>
                 <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 shrink-0">{w.worksheetType}</span>
-              </div>
+              </button>
             ))}
           </div>
         )}
       </div>
     </PageContainer>
+  );
+}
+
+function FromPhotoPanel({ selected }: { selected: { batch: string; track: string } }) {
+  const [title, setTitle] = useState('');
+  const [worksheetType, setWorksheetType] = useState<GeneratedWorksheetType>('practice');
+  const [file, setFile] = useState<File | null>(null);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const { mutateAsync: upload, isPending } = useUploadWorksheetAttachment();
+
+  async function handleUpload() {
+    if (!file || !title.trim()) return;
+    setError('');
+    setSuccess(false);
+    try {
+      await upload({ file, batch: selected.batch, track: selected.track, title: title.trim(), worksheetType });
+      setSuccess(true);
+      setFile(null);
+      setTitle('');
+    } catch (err) {
+      setError(extractErrorMessage(err));
+    }
+  }
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-8">
+      <SectionTitle subtitle="Already have this worksheet on paper? Snap a photo (or upload a PDF) and it's listed exactly as-is — no AI rewriting, just digitized and shared with your students.">
+        Upload an Existing Worksheet
+      </SectionTitle>
+
+      <div className="space-y-4 max-w-lg">
+        <input
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="Worksheet title — e.g. Partnership Problems"
+          className="w-full h-10 px-3 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-500"
+        />
+
+        <select
+          value={worksheetType}
+          onChange={(e) => setWorksheetType(e.target.value as GeneratedWorksheetType)}
+          className="w-full h-10 px-3 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-500"
+        >
+          {WORKSHEET_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+        </select>
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="application/pdf,image/jpeg,image/png,image/webp,image/gif"
+          capture="environment"
+          className="hidden"
+          onChange={(e) => { const f = e.target.files?.[0]; if (f) setFile(f); e.target.value = ''; }}
+        />
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          className="w-full h-24 rounded-xl border-2 border-dashed border-gray-300 hover:border-violet-400 hover:text-violet-600 text-sm font-medium text-gray-500 transition-colors flex flex-col items-center justify-center gap-1.5"
+        >
+          <Camera className="w-5 h-5" />
+          {file ? file.name : 'Take a photo or upload a PDF'}
+        </button>
+
+        {error && (
+          <div className="rounded-lg bg-red-50 border border-red-100 px-3 py-2">
+            <p className="text-sm text-red-600">{error}</p>
+          </div>
+        )}
+        {success && (
+          <div className="rounded-lg bg-green-50 border border-green-100 px-3 py-2">
+            <p className="text-sm text-green-700">Worksheet uploaded — see it in Saved Worksheets below.</p>
+          </div>
+        )}
+
+        <button
+          onClick={handleUpload}
+          disabled={isPending || !file || !title.trim()}
+          className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-violet-600 hover:bg-violet-700 text-sm font-semibold text-white transition-colors disabled:opacity-50"
+        >
+          {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}
+          {isPending ? 'Uploading…' : 'Upload & Save'}
+        </button>
+      </div>
+    </div>
   );
 }
 
