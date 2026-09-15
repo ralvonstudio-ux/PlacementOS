@@ -416,7 +416,7 @@ export function SwipeAttendanceDeck({ candidates, batch, track, date, onSuccess,
 
   if (submittedResult) {
     return (
-      <div className="flex-1 min-h-0 overflow-y-auto flex flex-col items-center text-center px-1 py-4">
+      <div className="flex-1 min-h-0 overflow-y-auto flex flex-col items-center text-center px-1 py-4 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
         <div className="relative w-24 h-24 mb-5 shrink-0">
           <span className="absolute inset-0 rounded-full bg-emerald-400 blur-2xl opacity-40" />
           <div className="relative w-24 h-24 rounded-full bg-emerald-500 flex items-center justify-center shadow-xl shadow-emerald-500/40">
@@ -622,7 +622,7 @@ export function SwipeAttendanceDeck({ candidates, batch, track, date, onSuccess,
       </div>
 
       {/* Only this middle section scrolls — the page around it stays put. */}
-      <div className="flex-1 min-h-0 overflow-y-auto -mx-1 px-1">
+      <div className="flex-1 min-h-0 overflow-y-auto -mx-1 px-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
         <div className="space-y-2">
           {filtered.map((c, i) => (
             <SwipeRow
