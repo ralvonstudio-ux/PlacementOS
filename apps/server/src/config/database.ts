@@ -39,6 +39,13 @@ export const connectDatabase = async (): Promise<void> => {
           db: mongoose.connection.name,
         });
 
+        try {
+          const { migrateLegacyTests } = await import('../features/tests/test-migration');
+          await migrateLegacyTests();
+        } catch (error) {
+          logger.error('Legacy test migration failed', { error });
+        }
+
         mongoose.connection.on('disconnected', () => {
           logger.warn('MongoDB disconnected — retrying automatically');
         });

@@ -11,15 +11,8 @@ export const testRepository = {
     return Test.findOne({ _id: id, instituteId, isDeleted: false });
   },
 
-  async findAll(instituteId: string, batch?: string): Promise<ITest[]> {
-    const filter: Record<string, unknown> = { instituteId, isDeleted: false };
-    if (batch) filter.batch = batch;
-    return Test.find(filter).sort({ createdAt: -1 }).lean<ITest[]>();
-  },
-
-  /** Every published test for a batch — what a candidate's test list draws from. */
-  async findPublishedForBatch(instituteId: string, batch: string): Promise<ITest[]> {
-    return Test.find({ instituteId, batch, status: 'published', isDeleted: false }).sort({ createdAt: -1 }).lean<ITest[]>();
+  async findAll(instituteId: string): Promise<ITest[]> {
+    return Test.find({ instituteId, isDeleted: false }).sort({ createdAt: -1 }).lean<ITest[]>();
   },
 
   async update(id: string, instituteId: string, data: Partial<CreateTestInput> & { status?: ITest['status'] }): Promise<ITest | null> {
@@ -40,31 +33,19 @@ export const testRepository = {
     const res = await Test.updateOne({ _id: id, instituteId, isDeleted: false }, { $set: { isDeleted: true, deletedAt: new Date() } });
     return res.modifiedCount > 0;
   },
-
-  /** Sets (or rotates) the test's access code — a staff-only, explicit action, so unlike most
-   *  access-code schemes this doesn't need a race guard: whoever calls it last simply wins,
-   *  which is fine since the caller (testService.sendAccessCode) always regenerates the code
-   *  fresh and re-notifies exactly the candidates it's sending to in that same call. */
-  async setAccessCode(id: string, instituteId: string, accessCodeHash: string): Promise<ITest | null> {
-    return Test.findOneAndUpdate(
-      { _id: id, instituteId, isDeleted: false },
-      { $set: { accessCodeHash, accessCodeIssuedAt: new Date() } },
-      { new: true }
-    );
-  },
 };
 
 export const testAttemptRepository = {
-  async findByTestAndCandidate(testId: string, candidateId: string, instituteId: string): Promise<ITestAttempt | null> {
-    return TestAttempt.findOne({ testId, candidateId, instituteId });
+  async findByAssignmentAndCandidate(assignmentId: string, candidateId: string, instituteId: string): Promise<ITestAttempt | null> {
+    return TestAttempt.findOne({ assignmentId, candidateId, instituteId });
   },
 
   async findById(id: string, instituteId: string): Promise<ITestAttempt | null> {
     return TestAttempt.findOne({ _id: id, instituteId });
   },
 
-  async create(instituteId: string, testId: string, candidateId: string): Promise<ITestAttempt> {
-    return TestAttempt.create({ instituteId, testId, candidateId, startedAt: new Date(), status: 'in_progress' });
+  async create(instituteId: string, testId: string, assignmentId: string, candidateId: string): Promise<ITestAttempt> {
+    return TestAttempt.create({ instituteId, testId, assignmentId, candidateId, startedAt: new Date(), status: 'in_progress' });
   },
 
   async upsertAnswer(attemptId: string, answer: ITestAnswer): Promise<ITestAttempt | null> {

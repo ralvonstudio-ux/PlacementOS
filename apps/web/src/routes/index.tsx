@@ -189,7 +189,7 @@ export const router = createBrowserRouter([
       // test-taking screen owns the entire viewport for the duration of the attempt.
       {
         element: <ProtectedRoute allowedRoles={['candidate']} />,
-        children: [{ path: 'candidate/tests/:testId/attempt', element: <TestTakingPage /> }],
+        children: [{ path: 'candidate/tests/:assignmentId/attempt', element: <TestTakingPage /> }],
       },
 
       { path: '*', element: <NotFound /> },

@@ -1,11 +1,11 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { KeyRound, MessageSquare, Send, Loader2, CheckCircle2, Inbox, CheckCheck } from 'lucide-react';
 import { PageContainer } from '@/components/workspace/PageContainer';
 import { WorkspaceHeader } from '@/components/workspace/WorkspaceHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useAuth } from '@/features/auth/hooks/useAuth';
-import { useTestList, useSendAccessCode } from '@/features/tests/hooks/useTests';
+import { useAllAssignments, useSendAccessCode } from '@/features/tests/hooks/useTests';
 import { useMyNotifications, useMarkNotificationRead, useMarkAllNotificationsRead, useSendStaffMessage } from '@/features/notifications/hooks/useNotifications';
 import { extractErrorMessage } from '@/services/api';
 import { CandidatePicker } from '../components/CandidatePicker';
@@ -38,29 +38,35 @@ function StaffMessagesView() {
   const [tab, setTab] = useState<'code' | 'message'>('code');
 
   // ── Send Access Code ──────────────────────────────────────────────────────
-  const { data: tests = [] } = useTestList();
-  const publishedTests = useMemo(() => tests.filter((t) => t.status === 'published'), [tests]);
-  const [testId, setTestId] = useState('');
+  const { data: assignments = [] } = useAllAssignments();
+  const [assignmentId, setAssignmentId] = useState('');
 
-  // Arriving from a test's "Send Access Code" shortcut (?testId=...) preselects it once the
-  // published-tests list has loaded enough to contain it.
+  // Arriving from an assignment's "Send Access Code" shortcut (?assignmentId=...) preselects it
+  // once the active-assignments list has loaded enough to contain it.
   useEffect(() => {
-    const fromQuery = searchParams.get('testId');
-    if (fromQuery && !testId && publishedTests.some((t) => t._id === fromQuery)) setTestId(fromQuery);
+    const fromQuery = searchParams.get('assignmentId');
+    if (fromQuery && !assignmentId && assignments.some((a) => a._id === fromQuery)) setAssignmentId(fromQuery);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams, publishedTests]);
-  const selectedTest = publishedTests.find((t) => t._id === testId);
+  }, [searchParams, assignments]);
+  const selectedAssignment = assignments.find((a) => a._id === assignmentId);
   const [codeRecipients, setCodeRecipients] = useState<Set<string>>(new Set());
   const { mutateAsync: sendAccessCode, isPending: isSendingCode } = useSendAccessCode();
   const [codeResult, setCodeResult] = useState('');
   const [codeError, setCodeError] = useState('');
 
+  // A "specific students" assignment already has its exact target list — no picker needed,
+  // sending goes straight to everyone in it. A "batch" assignment still needs the roster picker
+  // below so staff can choose who within the batch actually gets the code.
+  const fixedRecipients = selectedAssignment?.targetType === 'candidates' ? selectedAssignment.candidateIds ?? [] : null;
+
   async function handleSendCode() {
-    if (!selectedTest || codeRecipients.size === 0) return;
+    if (!selectedAssignment) return;
+    const candidateIds = fixedRecipients ?? [...codeRecipients];
+    if (candidateIds.length === 0) return;
     setCodeError('');
     setCodeResult('');
     try {
-      const { sentCount } = await sendAccessCode({ id: selectedTest._id, payload: { candidateIds: [...codeRecipients] } });
+      const { sentCount } = await sendAccessCode({ id: selectedAssignment._id, payload: { candidateIds } });
       setCodeResult(`Access code sent to ${sentCount} candidate(s). Anyone sent a new code before will need this one instead.`);
       setCodeRecipients(new Set());
     } catch (err) {
@@ -111,21 +117,27 @@ function StaffMessagesView() {
           </p>
 
           <div>
-            <label className="block text-xs text-gray-500 mb-1">Test</label>
-            <select value={testId} onChange={(e) => { setTestId(e.target.value); setCodeRecipients(new Set()); }} className={inputCls}>
-              <option value="">Select a published test…</option>
-              {publishedTests.map((t) => (
-                <option key={t._id} value={t._id}>{t.title} — {t.batch}{t.track ? ` / ${t.track}` : ''}</option>
+            <label className="block text-xs text-gray-500 mb-1">Assignment</label>
+            <select value={assignmentId} onChange={(e) => { setAssignmentId(e.target.value); setCodeRecipients(new Set()); }} className={inputCls}>
+              <option value="">Select an active assignment…</option>
+              {assignments.map((a) => (
+                <option key={a._id} value={a._id}>
+                  {a.testTitle} — {a.targetType === 'batch' ? a.batch : `${a.candidateIds?.length ?? 0} students`}{a.track ? ` / ${a.track}` : ''}
+                </option>
               ))}
             </select>
-            {publishedTests.length === 0 && <p className="text-xs text-amber-600 mt-1.5">No published tests yet — publish one first.</p>}
+            {assignments.length === 0 && <p className="text-xs text-amber-600 mt-1.5">No active assignments yet — assign an approved test to a batch or students first.</p>}
           </div>
 
-          {selectedTest && (
+          {selectedAssignment && (fixedRecipients ? (
+            <p className="text-sm text-gray-600 border border-gray-100 rounded-xl p-3">
+              This assignment targets {fixedRecipients.length} specific student(s) — sending goes to all of them.
+            </p>
+          ) : (
             <div className="border border-gray-100 rounded-xl p-3">
-              <CandidatePicker batch={selectedTest.batch} selected={codeRecipients} onChange={setCodeRecipients} />
+              <CandidatePicker batch={selectedAssignment.batch ?? ''} selected={codeRecipients} onChange={setCodeRecipients} />
             </div>
-          )}
+          ))}
 
           {codeError && <p className="text-sm text-red-600">{codeError}</p>}
           {codeResult && (
@@ -134,11 +146,11 @@ function StaffMessagesView() {
 
           <button
             onClick={handleSendCode}
-            disabled={!selectedTest || codeRecipients.size === 0 || isSendingCode}
+            disabled={!selectedAssignment || (fixedRecipients ? fixedRecipients.length === 0 : codeRecipients.size === 0) || isSendingCode}
             className="inline-flex items-center gap-2 h-10 px-5 rounded-xl bg-violet-600 hover:bg-violet-700 text-sm font-semibold text-white transition-colors disabled:opacity-50"
           >
             {isSendingCode ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-            Send Access Code{codeRecipients.size > 0 ? ` (${codeRecipients.size})` : ''}
+            Send Access Code{!fixedRecipients && codeRecipients.size > 0 ? ` (${codeRecipients.size})` : ''}
           </button>
         </div>
       ) : (

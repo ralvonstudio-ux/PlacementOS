@@ -80,7 +80,7 @@ function checkAdBlockBait(): boolean {
 }
 
 export function TestTakingPage() {
-  const { testId } = useParams<{ testId: string }>();
+  const { assignmentId } = useParams<{ assignmentId: string }>();
   const navigate = useNavigate();
 
   const [phase, setPhase] = useState<Phase>('instructions');
@@ -255,7 +255,7 @@ export function TestTakingPage() {
   useEffect(() => () => { stopMediaStreams(); exitFullscreenIfActive(); }, [stopMediaStreams, exitFullscreenIfActive]);
 
   async function handleStart() {
-    if (!testId) return;
+    if (!assignmentId) return;
     setError('');
     setCameraError('');
     setScreenShareError('');
@@ -304,7 +304,7 @@ export function TestTakingPage() {
     }
 
     try {
-      const result = await startTest.mutateAsync({ testId, payload: { accessCode: accessCode.trim() } });
+      const result = await startTest.mutateAsync({ assignmentId, payload: { accessCode: accessCode.trim() } });
       setSession(result);
       attemptIdRef.current = result.attempt._id;
       const existingAnswers: Record<number, { selectedOption?: string; answerText?: string }> = {};

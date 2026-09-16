@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { testsApi } from '../api/tests.api';
 import type {
   CreateTestPayload,
+  CreateAssignmentPayload,
   StartTestPayload,
   SendAccessCodePayload,
   GenerateTestDraftPayload,
@@ -13,13 +14,15 @@ import type {
 
 export const testKeys = {
   all: ['tests'] as const,
-  list: (batch?: string) => [...testKeys.all, 'list', batch ?? ''] as const,
+  list: () => [...testKeys.all, 'list'] as const,
   review: (id: string) => [...testKeys.all, 'review', id] as const,
   mine: () => [...testKeys.all, 'mine'] as const,
+  assignments: (testId: string) => [...testKeys.all, 'assignments', testId] as const,
+  allAssignments: () => [...testKeys.all, 'assignments', 'all'] as const,
 };
 
-export const useTestList = (batch?: string) =>
-  useQuery({ queryKey: testKeys.list(batch), queryFn: () => testsApi.list(batch) });
+export const useTestList = () =>
+  useQuery({ queryKey: testKeys.list(), queryFn: () => testsApi.list() });
 
 export const useCreateTest = () => {
   const qc = useQueryClient();
@@ -61,21 +64,29 @@ export const useReviewTest = () => {
   });
 };
 
-export const usePublishTest = () => {
+export const useCreateAssignment = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => testsApi.publish(id),
+    mutationFn: ({ testId, payload }: { testId: string; payload: CreateAssignmentPayload }) => testsApi.createAssignment(testId, payload),
     onSuccess: () => qc.invalidateQueries({ queryKey: testKeys.all }),
   });
 };
 
-export const useSendAccessCode = () =>
-  useMutation({ mutationFn: ({ id, payload }: { id: string; payload: SendAccessCodePayload }) => testsApi.sendAccessCode(id, payload) });
+export const useAssignments = (testId: string) =>
+  useQuery({ queryKey: testKeys.assignments(testId), queryFn: () => testsApi.listAssignments(testId), enabled: !!testId });
 
-export const useCloseTest = () => {
+export const useAllAssignments = () =>
+  useQuery({ queryKey: testKeys.allAssignments(), queryFn: () => testsApi.listAllAssignments() });
+
+export const useSendAccessCode = () =>
+  useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: SendAccessCodePayload }) => testsApi.sendAssignmentAccessCode(id, payload),
+  });
+
+export const useCloseAssignment = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => testsApi.close(id),
+    mutationFn: (assignmentId: string) => testsApi.closeAssignment(assignmentId),
     onSuccess: () => qc.invalidateQueries({ queryKey: testKeys.all }),
   });
 };
@@ -95,7 +106,7 @@ export const useMyTests = () =>
   useQuery({ queryKey: testKeys.mine(), queryFn: testsApi.listMine });
 
 export const useStartTest = () =>
-  useMutation({ mutationFn: ({ testId, payload }: { testId: string; payload: StartTestPayload }) => testsApi.start(testId, payload) });
+  useMutation({ mutationFn: ({ assignmentId, payload }: { assignmentId: string; payload: StartTestPayload }) => testsApi.start(assignmentId, payload) });
 
 export const useSubmitTestAnswer = () =>
   useMutation({ mutationFn: ({ attemptId, payload }: { attemptId: string; payload: SubmitAnswerPayload }) => testsApi.submitAnswer(attemptId, payload) });

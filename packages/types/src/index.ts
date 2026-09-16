@@ -1425,8 +1425,10 @@ export interface ImportSession {
 
 // ── Proctored Tests ────────────────────────────────────────────────────────
 
-export type TestStatus = 'draft' | 'pending_approval' | 'approved' | 'rejected' | 'published' | 'closed';
+export type TestStatus = 'draft' | 'pending_approval' | 'approved' | 'rejected';
 export type TestQuestionType = 'mcq' | 'short_answer' | 'coding';
+export type TestAssignmentTargetType = 'batch' | 'candidates';
+export type TestAssignmentStatus = 'active' | 'closed';
 
 /** Languages a coding question can be attempted/judged in — kept intentionally
  *  small (Judge0's latest runtime for each) rather than exposing its full catalog. */
@@ -1461,7 +1463,6 @@ export interface Test {
   _id: string;
   instituteId: string;
   title: string;
-  batch: string;
   track?: string;
   questions: TestQuestionSnapshot[];
   totalMarks: number;
@@ -1469,8 +1470,6 @@ export interface Test {
   /** Number of proctoring violations tolerated before an attempt auto-submits. */
   violationLimit: number;
   status: TestStatus;
-  /** Optional — the test can't be started before this time, even once published. */
-  scheduledAt?: string;
   /** Set only when the test was AI-drafted from uploaded/pasted content. */
   contentName?: string;
   topic?: string;
@@ -1486,17 +1485,14 @@ export interface Test {
 
 export interface CreateTestPayload {
   title: string;
-  batch: string;
   track?: string;
   questions: TestQuestionSnapshot[];
   durationMinutes: number;
   violationLimit: number;
-  scheduledAt?: string;
 }
 
 export interface GenerateTestDraftPayload {
   title: string;
-  batch: string;
   track?: string;
   contentName: string;
   topic: string;
@@ -1512,11 +1508,49 @@ export interface ReviewTestPayload {
   reviewNote?: string;
 }
 
-/** What a candidate sees in their test list / when starting one. */
+/** A sendout of one approved paper — to a batch, or to a named list of candidates. An approved
+ *  paper can have many of these over time (different batches, different semesters). */
+export interface TestAssignment {
+  _id: string;
+  instituteId: string;
+  testId: string;
+  targetType: TestAssignmentTargetType;
+  /** Set iff targetType === 'batch'. */
+  batch?: string;
+  /** Set iff targetType === 'candidates'. */
+  candidateIds?: string[];
+  scheduledAt?: string;
+  /** Whether staff have sent out an access code yet. */
+  codeIssued: boolean;
+  status: TestAssignmentStatus;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** A TestAssignment plus enough of its paper's content to render a list row without a
+ *  second round-trip — backs the TPO assignments list and the Messages "send access code" picker. */
+export interface TestAssignmentWithTest extends TestAssignment {
+  testTitle: string;
+  track?: string;
+  totalMarks: number;
+  durationMinutes: number;
+  questionCount: number;
+}
+
+export interface CreateAssignmentPayload {
+  targetType: TestAssignmentTargetType;
+  batch?: string;
+  candidateIds?: string[];
+  scheduledAt?: string;
+}
+
+/** What a candidate sees in their test list / when starting one — one row per active
+ *  TestAssignment they're eligible for. `_id` is the assignment id: that's what you start. */
 export interface TestForCandidate {
   _id: string;
   title: string;
-  batch: string;
+  batch?: string;
   track?: string;
   totalMarks: number;
   durationMinutes: number;
@@ -1526,7 +1560,7 @@ export interface TestForCandidate {
   /** Whether staff have sent out an access code yet — the test can't be started until they do,
    *  even after `scheduledAt` has passed. */
   codeIssued: boolean;
-  /** Set once the candidate has an attempt in progress or submitted for this test. */
+  /** Set once the candidate has an attempt in progress or submitted for this assignment. */
   attemptStatus?: TestAttemptStatus;
   /** Set once the candidate's attempt has been scored (i.e. submitted). */
   score?: number;
@@ -1563,6 +1597,7 @@ export interface TestAttempt {
   _id: string;
   instituteId: string;
   testId: string;
+  assignmentId: string;
   candidateId: string;
   startedAt: string;
   submittedAt?: string;
@@ -1633,6 +1668,8 @@ export interface TestAttemptReview {
   attempt: TestAttempt;
   candidateName: string;
   test: Test;
+  /** Which sendout this attempt came from — a batch name or "N students". */
+  assignmentLabel?: string;
 }
 
 export interface StartTestPayload {
@@ -1640,8 +1677,8 @@ export interface StartTestPayload {
   accessCode: string;
 }
 
-/** Staff action: (re)generates the test's access code and sends it, as a notification,
- *  to exactly these candidates (must be in the test's batch). */
+/** Staff action: (re)generates an assignment's access code and sends it, as a notification,
+ *  to exactly these candidates (must be within the assignment's target). */
 export interface SendAccessCodePayload {
   candidateIds: string[];
 }
