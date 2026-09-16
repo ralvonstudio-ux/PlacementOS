@@ -57,19 +57,38 @@ export const saveWorksheetSchema = z.object({
   trainingModuleIds: z.array(z.string()).default([]),
   worksheetType: z.enum(WORKSHEET_TYPES),
   title: z.string({ required_error: 'title is required' }).min(1).trim(),
-  questions: z.array(worksheetQuestionSchema).min(1, 'At least one question is required'),
+  // Empty for 'photo_upload' — that worksheet IS the attachment, not a question list.
+  questions: z.array(worksheetQuestionSchema).default([]),
   addNewToBank: z.boolean().default(true),
-  sourceType: z.enum(['module_bank', 'content_upload']).default('module_bank'),
+  sourceType: z.enum(['module_bank', 'content_upload', 'photo_upload']).default('module_bank'),
   // 'content_upload' only:
   moduleName: z.string().trim().optional(),
   sourceContent: z.string().optional(),
   aiReview: z.string().optional(),
-}).refine((v) => v.sourceType === 'content_upload' || v.trainingModuleIds.length > 0, {
+  // 'photo_upload' only:
+  attachmentUrl: z.string().url().optional(),
+  attachmentFileName: z.string().optional(),
+}).refine((v) => v.sourceType === 'content_upload' || v.trainingModuleIds.length > 0 || v.sourceType === 'photo_upload', {
   message: 'Select at least one training module',
   path: ['trainingModuleIds'],
 }).refine((v) => v.sourceType !== 'content_upload' || !!v.moduleName?.trim(), {
   message: 'moduleName is required for a content-based worksheet',
   path: ['moduleName'],
+}).refine((v) => v.sourceType === 'photo_upload' || v.questions.length > 0, {
+  message: 'At least one question is required',
+  path: ['questions'],
+}).refine((v) => v.sourceType !== 'photo_upload' || !!v.attachmentUrl, {
+  message: 'attachmentUrl is required for a photo/file worksheet',
+  path: ['attachmentUrl'],
+});
+
+// Multipart form fields for the "upload an existing worksheet as-is" flow — the file itself
+// arrives separately as req.file via documentUploadMiddleware.
+export const uploadWorksheetSchema = z.object({
+  batch: z.string({ required_error: 'batch is required' }).min(1).trim(),
+  track: z.string({ required_error: 'track is required' }).min(1).trim(),
+  title: z.string({ required_error: 'title is required' }).min(1).trim(),
+  worksheetType: z.enum(WORKSHEET_TYPES),
 });
 
 export const listWorksheetsSchema = z.object({
@@ -85,6 +104,7 @@ export const updateWorksheetSchema = z.object({
   title: z.string().min(1).trim().optional(),
   questions: z.array(z.object({
     questionText: z.string().min(1),
+    options: z.array(z.string()).nullable().optional(),
     difficulty: z.enum(DIFFICULTIES),
     estimatedTimeMinutes: z.number().min(0),
   })).optional(),
@@ -95,3 +115,4 @@ export type GenerateWorksheetFromContentInput = z.infer<typeof generateWorksheet
 export type SaveWorksheetInput = z.infer<typeof saveWorksheetSchema>;
 export type ListWorksheetsInput = z.infer<typeof listWorksheetsSchema>;
 export type UpdateWorksheetInput = z.infer<typeof updateWorksheetSchema>;
+export type UploadWorksheetInput = z.infer<typeof uploadWorksheetSchema>;

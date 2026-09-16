@@ -5,7 +5,7 @@ import {
   SlidersHorizontal, Users, RotateCcw, Save, MessageCircle, Pencil,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import type { AttendanceStatus, Candidate } from '@placementos/types';
+import type { AttendanceRecord, AttendanceStatus, Candidate } from '@placementos/types';
 import { useBulkMarkAttendance } from '../hooks/useAttendance';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
@@ -24,11 +24,31 @@ function formatTimeShort(d: Date): string {
   return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }).toLowerCase();
 }
 
+/** Builds the same submitted-summary shape confirmSubmit produces, but from
+ *  records already on the server — so reopening an already-marked class (e.g.
+ *  via History) lands straight on the success view instead of a blank form. */
+function summarizeRecords(records: AttendanceRecord[], candidates: Candidate[]): SubmittedResult | null {
+  if (records.length === 0) return null;
+  const byCandidate = new Map(records.map((r) => [r.candidateId, r]));
+  const absentCandidates = candidates.filter((c) => byCandidate.get(c._id)?.status === 'absent');
+  const presentCount = candidates.filter((c) => (byCandidate.get(c._id)?.status ?? 'present') === 'present').length;
+  const latestMs = records.reduce((max, r) => Math.max(max, new Date(r.updatedAt || r.createdAt).getTime()), 0);
+  return {
+    presentCount,
+    absentCount: absentCandidates.length,
+    absentCandidates,
+    submittedAt: latestMs ? new Date(latestMs) : new Date(),
+  };
+}
+
 interface Props {
   candidates: Candidate[];
   batch: string;
   track: string;
   date: string;
+  /** Records already on the server for this batch/track/date, if any — when
+   *  present, the deck opens directly into the submitted/success view. */
+  initialRecords?: AttendanceRecord[];
   onSuccess?: () => void;
   onCancel?: () => void;
 }
@@ -275,10 +295,14 @@ function StatCard({ label, count, tone }: { label: string; count: number; tone: 
   );
 }
 
-export function SwipeAttendanceDeck({ candidates, batch, track, date, onSuccess, onCancel }: Props) {
+export function SwipeAttendanceDeck({ candidates, batch, track, date, initialRecords, onSuccess, onCancel }: Props) {
   const navigate = useNavigate();
   const { mutateAsync: bulkMark, isPending } = useBulkMarkAttendance();
-  const [statuses, setStatuses] = useState<Record<string, AttendanceStatus>>({});
+  const [statuses, setStatuses] = useState<Record<string, AttendanceStatus>>(() => {
+    const init: Record<string, AttendanceStatus> = {};
+    for (const r of initialRecords ?? []) init[r.candidateId] = r.status;
+    return init;
+  });
   const [search, setSearch] = useState('');
   const [showSearch, setShowSearch] = useState(false);
   const [showFilterMenu, setShowFilterMenu] = useState(false);
@@ -286,13 +310,24 @@ export function SwipeAttendanceDeck({ candidates, batch, track, date, onSuccess,
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [restoredDraft, setRestoredDraft] = useState(false);
-  const [submittedResult, setSubmittedResult] = useState<SubmittedResult | null>(null);
+  // Already-submitted records (e.g. reopened via History) land straight on
+  // the success view; a local unsaved draft, if one turns up, wins instead.
+  const [submittedResult, setSubmittedResult] = useState<SubmittedResult | null>(
+    () => summarizeRecords(initialRecords ?? [], candidates)
+  );
   const historyRef = useRef<{ id: string; prev: AttendanceStatus | undefined }[]>([]);
   const key = draftKey(batch, track, date);
   const hydratedRef = useRef(false);
+  // Only actual edits should be drafted — `statuses` also gets seeded from
+  // already-submitted server records (so "Edit Attendance" has something to
+  // start from), and without this guard that seed alone looked like unsaved
+  // work and falsely triggered "restored unsaved attendance" on next visit.
+  const dirtyRef = useRef(false);
 
   // Restore any unsaved marks left behind by a network drop, an accidental
-  // reload, or the tab getting killed mid-session — nothing gets lost.
+  // reload, or the tab getting killed mid-session — nothing gets lost. A
+  // restored draft means there was work in progress, so it also takes the
+  // view back to editing even if today's attendance was already submitted.
   useEffect(() => {
     try {
       const raw = localStorage.getItem(key);
@@ -301,6 +336,8 @@ export function SwipeAttendanceDeck({ candidates, batch, track, date, onSuccess,
         if (saved && Object.keys(saved).length > 0) {
           setStatuses(saved);
           setRestoredDraft(true);
+          setSubmittedResult(null);
+          dirtyRef.current = true;
         }
       }
     } catch {
@@ -310,10 +347,11 @@ export function SwipeAttendanceDeck({ candidates, batch, track, date, onSuccess,
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
 
-  // Autosave on every change (skip the very first render so we don't
-  // immediately re-write the draft we just restored).
+  // Autosave on every real edit (skip the very first render, and skip state
+  // that only reflects already-submitted server records rather than an
+  // actual unsaved change).
   useEffect(() => {
-    if (!hydratedRef.current) return;
+    if (!hydratedRef.current || !dirtyRef.current) return;
     try {
       if (Object.keys(statuses).length === 0) localStorage.removeItem(key);
       else localStorage.setItem(key, JSON.stringify(statuses));
@@ -342,11 +380,13 @@ export function SwipeAttendanceDeck({ candidates, batch, track, date, onSuccess,
   const allPresent = candidates.length > 0 && candidates.every((c) => statuses[c._id] === 'present');
 
   function mark(id: string, status: AttendanceStatus) {
+    dirtyRef.current = true;
     historyRef.current.push({ id, prev: statuses[id] });
     setStatuses((prev) => ({ ...prev, [id]: status }));
   }
 
   function unmark(id: string) {
+    dirtyRef.current = true;
     historyRef.current.push({ id, prev: statuses[id] });
     setStatuses((prev) => {
       const next = { ...prev };
@@ -358,6 +398,7 @@ export function SwipeAttendanceDeck({ candidates, batch, track, date, onSuccess,
   function undoLast() {
     const last = historyRef.current.pop();
     if (!last) return;
+    dirtyRef.current = true;
     setStatuses((prev) => {
       const next = { ...prev };
       if (last.prev === undefined) delete next[last.id];
@@ -367,6 +408,7 @@ export function SwipeAttendanceDeck({ candidates, batch, track, date, onSuccess,
   }
 
   function markAllPresent() {
+    dirtyRef.current = true;
     const next: Record<string, AttendanceStatus> = {};
     for (const c of candidates) next[c._id] = 'present';
     setStatuses(next);
@@ -374,6 +416,7 @@ export function SwipeAttendanceDeck({ candidates, batch, track, date, onSuccess,
   }
 
   function unmarkAll() {
+    dirtyRef.current = true;
     setStatuses({});
     historyRef.current = [];
   }
@@ -390,6 +433,7 @@ export function SwipeAttendanceDeck({ candidates, batch, track, date, onSuccess,
       records: candidates.map((c) => ({ candidateId: c._id, status: statuses[c._id] ?? 'present' })),
     });
     try { localStorage.removeItem(key); } catch { /* best effort */ }
+    dirtyRef.current = false;
     setConfirmOpen(false);
     const absentCandidates = candidates.filter((c) => statuses[c._id] === 'absent');
     setSubmittedResult({
@@ -416,7 +460,7 @@ export function SwipeAttendanceDeck({ candidates, batch, track, date, onSuccess,
 
   if (submittedResult) {
     return (
-      <div className="flex-1 min-h-0 overflow-y-auto flex flex-col items-center text-center px-1 py-4">
+      <div className="flex-1 min-h-0 overflow-y-auto flex flex-col items-center text-center px-1 py-4 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
         <div className="relative w-24 h-24 mb-5 shrink-0">
           <span className="absolute inset-0 rounded-full bg-emerald-400 blur-2xl opacity-40" />
           <div className="relative w-24 h-24 rounded-full bg-emerald-500 flex items-center justify-center shadow-xl shadow-emerald-500/40">
@@ -622,7 +666,7 @@ export function SwipeAttendanceDeck({ candidates, batch, track, date, onSuccess,
       </div>
 
       {/* Only this middle section scrolls — the page around it stays put. */}
-      <div className="flex-1 min-h-0 overflow-y-auto -mx-1 px-1">
+      <div className="flex-1 min-h-0 overflow-y-auto -mx-1 px-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
         <div className="space-y-2">
           {filtered.map((c, i) => (
             <SwipeRow

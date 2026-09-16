@@ -47,13 +47,15 @@ export function BatchAttendancePage() {
     enabled:  !!batch,
   });
 
-  // Only fetched for the read-only past/future view — the editable Today view marks fresh.
-  const { data: pastRecords = [], isLoading: pastLoading } = useBatchAttendance(batch!, track!, isToday ? undefined : date);
+  // Fetched for every date, today included — if today's attendance was already
+  // submitted (e.g. faculty came back via History), the deck opens straight into
+  // its submitted/success view instead of a blank editable form.
+  const { data: records = [], isLoading: recordsLoading } = useBatchAttendance(batch!, track!, date);
   const pastStatusByCandidate = useMemo(() => {
     const map = new Map<string, string>();
-    for (const r of pastRecords) map.set(r.candidateId, r.status);
+    for (const r of records) map.set(r.candidateId, r.status);
     return map;
-  }, [pastRecords]);
+  }, [records]);
 
   function goToDate(next: string) {
     setSearchParams(next === today ? {} : { date: next });
@@ -100,7 +102,7 @@ export function BatchAttendancePage() {
 
       {isToday ? (
         <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-5 flex-1 min-h-0 flex flex-col">
-          {isLoading ? (
+          {isLoading || recordsLoading ? (
             <div className="space-y-3 animate-pulse">
               {Array.from({ length: 8 }).map((_, i) => (
                 <div key={i} className="h-12 bg-gray-100 rounded-lg" />
@@ -116,6 +118,7 @@ export function BatchAttendancePage() {
               batch={batch!}
               track={track!}
               date={date}
+              initialRecords={records}
               onSuccess={() => navigate('/faculty/batches')}
               onCancel={() => navigate('/faculty/batches')}
             />
@@ -127,7 +130,7 @@ export function BatchAttendancePage() {
           <p className="text-xs text-gray-400 mb-4">
             {date > today ? "Future date — nothing recorded yet." : 'Past attendance is view-only.'}
           </p>
-          {pastLoading || isLoading ? (
+          {recordsLoading || isLoading ? (
             <div className="space-y-3 animate-pulse">
               {Array.from({ length: 6 }).map((_, i) => <div key={i} className="h-12 bg-gray-100 rounded-lg" />)}
             </div>
