@@ -13,7 +13,7 @@ interface RawTestQuestion {
 }
 
 function buildDraftPrompt(input: GenerateTestDraftInput, mcqCount: number, shortAnswerCount: number): string {
-  return `You are an experienced examiner writing a test titled "${input.title}" for batch ${input.batch}${input.track ? `, track "${input.track}"` : ''}, on the topic "${input.topic}", based on the content below (from "${input.contentName}").
+  return `You are an experienced examiner writing a test titled "${input.title}"${input.track ? ` for track "${input.track}"` : ''}, on the topic "${input.topic}", based on the content below (from "${input.contentName}").
 
 Content:
 """

@@ -44,35 +44,50 @@ export const testController = {
     } catch (err) { next(err); }
   },
 
-  async publish(req: Request, res: Response, next: NextFunction): Promise<void> {
+  async createAssignment(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const ctx = buildAuthContext(req.user!, req.ip ?? undefined);
-      const test = await testService.publish(req.params.id, ctx);
-      sendSuccess(res, test, 'Test published to the batch');
+      const assignment = await testService.createAssignment(req.params.id, req.body, ctx);
+      sendCreated(res, assignment, 'Test assigned');
     } catch (err) { next(err); }
   },
 
-  async sendAccessCode(req: Request, res: Response, next: NextFunction): Promise<void> {
+  async listAssignments(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const ctx = buildAuthContext(req.user!, req.ip ?? undefined);
-      const result = await testService.sendAccessCode(req.params.id, req.body, ctx);
+      const assignments = await testService.listAssignments(req.params.id, ctx);
+      sendSuccess(res, assignments);
+    } catch (err) { next(err); }
+  },
+
+  async listAllAssignments(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const ctx = buildAuthContext(req.user!, req.ip ?? undefined);
+      const assignments = await testService.listAllAssignments(ctx);
+      sendSuccess(res, assignments);
+    } catch (err) { next(err); }
+  },
+
+  async sendAssignmentAccessCode(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const ctx = buildAuthContext(req.user!, req.ip ?? undefined);
+      const result = await testService.sendAssignmentAccessCode(req.params.assignmentId, req.body, ctx);
       sendSuccess(res, result, `Access code sent to ${result.sentCount} candidate(s)`);
     } catch (err) { next(err); }
   },
 
-  async close(req: Request, res: Response, next: NextFunction): Promise<void> {
+  async closeAssignment(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const ctx = buildAuthContext(req.user!, req.ip ?? undefined);
-      const test = await testService.close(req.params.id, ctx);
-      sendSuccess(res, test, 'Test closed');
+      const assignment = await testService.closeAssignment(req.params.assignmentId, ctx);
+      sendSuccess(res, assignment, 'Assignment closed');
     } catch (err) { next(err); }
   },
 
   async list(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const ctx = buildAuthContext(req.user!, req.ip ?? undefined);
-      const batch = typeof req.query.batch === 'string' ? req.query.batch : undefined;
-      const tests = await testService.list(ctx, batch);
+      const tests = await testService.list(ctx);
       sendSuccess(res, tests);
     } catch (err) { next(err); }
   },
@@ -104,7 +119,7 @@ export const testController = {
   async start(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const ctx = buildAuthContext(req.user!, req.ip ?? undefined);
-      const result = await testService.start(req.params.id, req.body, ctx);
+      const result = await testService.start(req.params.assignmentId, req.body, ctx);
       sendSuccess(res, result, 'Test started');
     } catch (err) { next(err); }
   },

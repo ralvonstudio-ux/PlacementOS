@@ -34,7 +34,7 @@ export function TestBuilderPage() {
 
   return (
     <PageContainer>
-      <WorkspaceHeader title="New Test" subtitle="AI-draft a test from your content, or build one by hand — either way it saves as a draft until approved and published" />
+      <WorkspaceHeader title="New Test" subtitle="AI-draft a test from your content, or build one by hand — either way it saves as a draft until approved, then you decide who to send it to" />
 
       <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-lg p-1 mb-6 w-fit">
         <button onClick={() => setMode('ai')} className={`inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold rounded-md transition-colors ${mode === 'ai' ? 'bg-violet-600 text-white' : 'text-gray-500 hover:text-gray-700'}`}>
@@ -55,7 +55,6 @@ function AiDraftForm({ basePath }: { basePath: string }) {
   const { mutateAsync, isPending } = useGenerateTestDraft();
 
   const [title, setTitle] = useState('');
-  const [batch, setBatch] = useState('');
   const [track, setTrack] = useState('');
   const [contentName, setContentName] = useState('');
   const [topic, setTopic] = useState('');
@@ -66,7 +65,7 @@ function AiDraftForm({ basePath }: { basePath: string }) {
   const [violationLimit, setViolationLimit] = useState(3);
   const [error, setError] = useState('');
 
-  const canSubmit = title.trim() && batch.trim() && contentName.trim() && topic.trim() && sourceContent.trim() && (mcqCount + shortAnswerCount) > 0;
+  const canSubmit = title.trim() && contentName.trim() && topic.trim() && sourceContent.trim() && (mcqCount + shortAnswerCount) > 0;
 
   async function handleSubmit() {
     setError('');
@@ -74,7 +73,6 @@ function AiDraftForm({ basePath }: { basePath: string }) {
     try {
       await mutateAsync({
         title: title.trim(),
-        batch: batch.trim(),
         track: track.trim() || undefined,
         contentName: contentName.trim(),
         topic: topic.trim(),
@@ -93,10 +91,7 @@ function AiDraftForm({ basePath }: { basePath: string }) {
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 max-w-3xl space-y-4">
       <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Test title" className={inputCls} />
-      <div className="grid grid-cols-2 gap-3">
-        <input value={batch} onChange={(e) => setBatch(e.target.value)} placeholder="Batch" className={inputCls} />
-        <input value={track} onChange={(e) => setTrack(e.target.value)} placeholder="Track (optional)" className={inputCls} />
-      </div>
+      <input value={track} onChange={(e) => setTrack(e.target.value)} placeholder="Track (optional)" className={inputCls} />
       <div className="grid grid-cols-2 gap-3">
         <input value={contentName} onChange={(e) => setContentName(e.target.value)} placeholder="Content name (e.g. Chapter 4 notes)" className={inputCls} />
         <input value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="Topic" className={inputCls} />
@@ -150,11 +145,9 @@ function ManualBuilderForm({ basePath }: { basePath: string }) {
   const { mutateAsync, isPending } = useCreateTest();
 
   const [title, setTitle] = useState('');
-  const [batch, setBatch] = useState('');
   const [track, setTrack] = useState('');
   const [durationMinutes, setDurationMinutes] = useState(30);
   const [violationLimit, setViolationLimit] = useState(3);
-  const [scheduledAt, setScheduledAt] = useState('');
   const [questions, setQuestions] = useState<TestQuestionSnapshot[]>([emptyQuestion()]);
   const [error, setError] = useState('');
 
@@ -166,18 +159,16 @@ function ManualBuilderForm({ basePath }: { basePath: string }) {
 
   async function handleSubmit() {
     setError('');
-    if (!title.trim() || !batch.trim() || questions.length === 0) return;
+    if (!title.trim() || questions.length === 0) return;
     try {
-      const test = await mutateAsync({
+      await mutateAsync({
         title: title.trim(),
-        batch: batch.trim(),
         track: track.trim() || undefined,
         questions: questions.map((q) => ({ ...q, options: q.questionType === 'mcq' ? q.options?.filter((o) => o.trim()) : undefined })),
         durationMinutes,
         violationLimit,
-        scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : undefined,
       });
-      navigate(`${basePath}/tests/${test._id}/review`);
+      navigate(`${basePath}/tests`);
     } catch (err) {
       setError(extractErrorMessage(err));
     }
@@ -187,10 +178,7 @@ function ManualBuilderForm({ basePath }: { basePath: string }) {
     <>
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 max-w-3xl space-y-4 mb-6">
         <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Test title" className={inputCls} />
-        <div className="grid grid-cols-2 gap-3">
-          <input value={batch} onChange={(e) => setBatch(e.target.value)} placeholder="Batch" className={inputCls} />
-          <input value={track} onChange={(e) => setTrack(e.target.value)} placeholder="Track (optional)" className={inputCls} />
-        </div>
+        <input value={track} onChange={(e) => setTrack(e.target.value)} placeholder="Track (optional)" className={inputCls} />
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="block text-xs text-gray-500 mb-1">Duration (minutes)</label>
@@ -200,10 +188,6 @@ function ManualBuilderForm({ basePath }: { basePath: string }) {
             <label className="block text-xs text-gray-500 mb-1">Violation limit before auto-submit</label>
             <input type="number" min={1} value={violationLimit} onChange={(e) => setViolationLimit(Number(e.target.value))} className={inputCls} />
           </div>
-        </div>
-        <div>
-          <label className="block text-xs text-gray-500 mb-1">Opens at (optional — leave blank to allow starting as soon as it's published)</label>
-          <input type="datetime-local" value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} className={inputCls} />
         </div>
       </div>
 
@@ -277,7 +261,7 @@ function ManualBuilderForm({ basePath }: { basePath: string }) {
         <p className="text-sm text-gray-500">Total marks: <span className="font-semibold text-gray-900">{totalMarks}</span></p>
         <button
           onClick={handleSubmit}
-          disabled={isPending || !title.trim() || !batch.trim()}
+          disabled={isPending || !title.trim()}
           className="inline-flex items-center gap-2 h-10 px-5 rounded-xl bg-violet-600 hover:bg-violet-700 text-sm font-semibold text-white transition-colors disabled:opacity-50"
         >
           {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}

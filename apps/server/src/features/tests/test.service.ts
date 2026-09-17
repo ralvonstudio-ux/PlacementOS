@@ -1,8 +1,10 @@
 import bcrypt from 'bcrypt';
 import { testRepository, testAttemptRepository } from './test.repository';
+import { testAssignmentRepository } from './test-assignment.repository';
 import {
   createTestSchema,
   updateTestSchema,
+  createAssignmentSchema,
   startTestSchema,
   sendAccessCodeSchema,
   submitAnswerSchema,
@@ -11,7 +13,7 @@ import {
   reviewTestSchema,
   runCodeSchema,
 } from './test.validation';
-import { ITest, ITestAttempt, ITestQuestionSnapshot } from './test.model';
+import { ITest, ITestAttempt, ITestAssignment, ITestQuestionSnapshot } from './test.model';
 import { NotFoundError, ValidationError, ForbiddenError } from '../../middlewares/errorHandler';
 import { AuthContext } from '../../lib/auth-context';
 import { candidateRepository } from '../candidates/candidate.repository';
@@ -22,6 +24,8 @@ import { testGeneratorService } from './test-generator.service';
 import { isJudge0Configured, runOnJudge0 } from '../../lib/judge0';
 import type {
   Test as TestApiShape,
+  TestAssignment as TestAssignmentApiShape,
+  TestAssignmentWithTest,
   TestForCandidate,
   StartTestAttemptResult,
   TestAttempt as TestAttemptApiShape,
@@ -31,18 +35,18 @@ import type {
   RunCodeCaseResult,
 } from '@placementos/types';
 
+const idOf = (doc: unknown) => String((doc as { _id: { toString(): string } })._id);
+
 const toTestApiShape = (t: ITest): TestApiShape => ({
-  _id: String((t as unknown as { _id: { toString(): string } })._id),
+  _id: idOf(t),
   instituteId: t.instituteId,
   title: t.title,
-  batch: t.batch,
   track: t.track,
   questions: t.questions,
   totalMarks: t.totalMarks,
   durationMinutes: t.durationMinutes,
   violationLimit: t.violationLimit,
   status: t.status,
-  scheduledAt: t.scheduledAt ? new Date(t.scheduledAt).toISOString() : undefined,
   contentName: t.contentName,
   topic: t.topic,
   aiGenerated: t.aiGenerated,
@@ -55,10 +59,29 @@ const toTestApiShape = (t: ITest): TestApiShape => ({
   updatedAt: new Date(t.updatedAt).toISOString(),
 });
 
-const toAttemptApiShape = (a: ITestAttempt): TestAttemptApiShape => ({
-  _id: String((a as unknown as { _id: { toString(): string } })._id),
+const toAssignmentApiShape = (a: ITestAssignment): TestAssignmentApiShape => ({
+  _id: idOf(a),
   instituteId: a.instituteId,
   testId: a.testId,
+  targetType: a.targetType,
+  batch: a.batch,
+  candidateIds: a.candidateIds,
+  scheduledAt: a.scheduledAt ? new Date(a.scheduledAt).toISOString() : undefined,
+  codeIssued: !!a.accessCodeIssuedAt,
+  status: a.status,
+  createdBy: a.createdBy,
+  createdAt: new Date(a.createdAt).toISOString(),
+  updatedAt: new Date(a.updatedAt).toISOString(),
+});
+
+const assignmentLabel = (a: Pick<ITestAssignment, 'targetType' | 'batch' | 'candidateIds'>) =>
+  a.targetType === 'batch' ? a.batch ?? '' : `${a.candidateIds?.length ?? 0} student(s)`;
+
+const toAttemptApiShape = (a: ITestAttempt): TestAttemptApiShape => ({
+  _id: idOf(a),
+  instituteId: a.instituteId,
+  testId: a.testId,
+  assignmentId: a.assignmentId,
   candidateId: a.candidateId,
   startedAt: new Date(a.startedAt).toISOString(),
   submittedAt: a.submittedAt ? new Date(a.submittedAt).toISOString() : undefined,
@@ -152,7 +175,6 @@ export const testService = {
 
   async create(rawInput: unknown, ctx: AuthContext): Promise<TestApiShape> {
     const data = createTestSchema.parse(rawInput);
-    if (ctx.role === 'faculty') await assertFacultyCanAccessQuestionBank(ctx, data.batch, data.track ?? '');
     const test = await testRepository.create(ctx.instituteId, ctx.userId, data);
     return toTestApiShape(test);
   },
@@ -162,13 +184,10 @@ export const testService = {
    *  before submitting it for approval. */
   async generateDraft(rawInput: unknown, ctx: AuthContext): Promise<TestApiShape> {
     const input = generateTestDraftSchema.parse(rawInput);
-    if (ctx.role === 'faculty') await assertFacultyCanAccessQuestionBank(ctx, input.batch, input.track ?? '');
-
     const { questions, aiReview } = await testGeneratorService.generateDraft(input);
 
     const test = await testRepository.create(ctx.instituteId, ctx.userId, {
       title: input.title,
-      batch: input.batch,
       track: input.track,
       questions,
       durationMinutes: input.durationMinutes,
@@ -221,41 +240,83 @@ export const testService = {
     return toTestApiShape(updated);
   },
 
-  async publish(id: string, ctx: AuthContext): Promise<TestApiShape> {
-    const existing = await testRepository.findById(id, ctx.instituteId);
-    if (!existing) throw new NotFoundError('Test');
-    if (existing.status !== 'approved') throw new ValidationError('Only an approved test can be published');
-    const updated = await testRepository.update(id, ctx.instituteId, { status: 'published' } as never);
-    if (!updated) throw new NotFoundError('Test');
-
-    // Publishing only makes the test visible to its batch — it stays unstartable until a
-    // staff member explicitly sends the access code (see sendAccessCode below). No code is
-    // generated here, so there's nothing to leak by simply publishing.
-    return toTestApiShape(updated);
-  },
-
-  /** Staff-only: (re)generates the access code and delivers it — as a notification containing
-   *  the one-time plaintext — to exactly the given candidates, and no one else. Regenerating
-   *  overwrites any previously issued code, so a later send to a different/expanded group
-   *  invalidates whatever was sent before; staff should include everyone who still needs it
-   *  in one call. The plaintext exists only in this function's memory for the one request —
-   *  it's never returned to the caller or logged, only bcrypt-hashed at rest (same primitive
-   *  the app already uses for login passwords) and embedded straight into the notifications. */
-  async sendAccessCode(testId: string, rawInput: unknown, ctx: AuthContext): Promise<{ sentCount: number }> {
-    const { candidateIds } = sendAccessCodeSchema.parse(rawInput);
+  /** Staff-only: sends this approved paper out to a batch or a named list of candidates.
+   *  One paper can be assigned many times — to different batches, or again later — without
+   *  ever needing re-approval. */
+  async createAssignment(testId: string, rawInput: unknown, ctx: AuthContext): Promise<TestAssignmentApiShape> {
+    const data = createAssignmentSchema.parse(rawInput);
     const test = await testRepository.findById(testId, ctx.instituteId);
     if (!test) throw new NotFoundError('Test');
-    if (test.status !== 'published') throw new ValidationError('Only a published test can have its access code sent');
+    if (test.status !== 'approved') throw new ValidationError('Only an approved test can be assigned');
+
+    if (data.targetType === 'batch') {
+      if (ctx.role === 'faculty') await assertFacultyCanAccessQuestionBank(ctx, data.batch!, test.track ?? '');
+    } else if (ctx.role === 'faculty') {
+      throw new ForbiddenError('Only a TPO/admin can assign a test to specific students');
+    }
+
+    const assignment = await testAssignmentRepository.create(ctx.instituteId, testId, ctx.userId, data);
+    return toAssignmentApiShape(assignment);
+  },
+
+  async listAssignments(testId: string, ctx: AuthContext): Promise<TestAssignmentApiShape[]> {
+    const test = await testRepository.findById(testId, ctx.instituteId);
+    if (!test) throw new NotFoundError('Test');
+    const assignments = await testAssignmentRepository.findByTest(testId, ctx.instituteId);
+    return assignments.map(toAssignmentApiShape);
+  },
+
+  /** Every active assignment across every paper — backs the Messages "send access code" picker. */
+  async listAllAssignments(ctx: AuthContext): Promise<TestAssignmentWithTest[]> {
+    const assignments = await testAssignmentRepository.findAllActive(ctx.instituteId);
+    const testIds = [...new Set(assignments.map((a) => a.testId))];
+    const tests = await Promise.all(testIds.map((id) => testRepository.findById(id, ctx.instituteId)));
+    const testById = new Map(tests.filter((t): t is ITest => !!t).map((t) => [idOf(t), t]));
+
+    return assignments
+      .map((a): TestAssignmentWithTest | null => {
+        const test = testById.get(a.testId);
+        if (!test) return null;
+        return {
+          ...toAssignmentApiShape(a),
+          testTitle: test.title,
+          track: test.track,
+          totalMarks: test.totalMarks,
+          durationMinutes: test.durationMinutes,
+          questionCount: test.questions.length,
+        };
+      })
+      .filter((a): a is TestAssignmentWithTest => !!a);
+  },
+
+  /** Staff-only: (re)generates the assignment's access code and delivers it — as a notification
+   *  containing the one-time plaintext — to exactly the given candidates, and no one else.
+   *  Regenerating overwrites any previously issued code, so a later send to a
+   *  different/expanded group invalidates whatever was sent before; staff should include
+   *  everyone who still needs it in one call. The plaintext exists only in this function's
+   *  memory for the one request — it's never returned to the caller or logged, only
+   *  bcrypt-hashed at rest (same primitive the app already uses for login passwords) and
+   *  embedded straight into the notifications. */
+  async sendAssignmentAccessCode(assignmentId: string, rawInput: unknown, ctx: AuthContext): Promise<{ sentCount: number }> {
+    const { candidateIds } = sendAccessCodeSchema.parse(rawInput);
+    const assignment = await testAssignmentRepository.findById(assignmentId, ctx.instituteId);
+    if (!assignment) throw new NotFoundError('Test assignment');
+    if (assignment.status !== 'active') throw new ValidationError('Only an active assignment can have its access code sent');
+
+    const test = await testRepository.findById(assignment.testId, ctx.instituteId);
+    if (!test) throw new NotFoundError('Test');
 
     const candidates = await candidateRepository.findAllForSchoolByIds(candidateIds, ctx.instituteId);
-    const recipientIds = candidates
-      .filter((c) => c.batch === test.batch)
-      .map((c) => String((c as unknown as { _id: { toString(): string } })._id));
-    if (recipientIds.length === 0) throw new ValidationError("None of the selected candidates are in this test's batch");
+    const eligible =
+      assignment.targetType === 'batch'
+        ? candidates.filter((c) => c.batch === assignment.batch)
+        : candidates.filter((c) => assignment.candidateIds?.includes(idOf(c)));
+    const recipientIds = eligible.map((c) => idOf(c));
+    if (recipientIds.length === 0) throw new ValidationError("None of the selected candidates are within this assignment's target");
 
     const code = generateAccessCode();
     const accessCodeHash = await bcrypt.hash(code, ACCESS_CODE_SALT_ROUNDS);
-    await testRepository.setAccessCode(testId, ctx.instituteId, accessCodeHash);
+    await testAssignmentRepository.setAccessCode(assignmentId, ctx.instituteId, accessCodeHash);
 
     await notificationRepository.createForRecipients(
       ctx.instituteId,
@@ -265,24 +326,24 @@ export const testService = {
         type: 'test_access_code' as const,
         title: `${test.title} — access code`,
         body: `Your access code is ${code}. Enter it on the test's start screen — it works once you begin.`,
-        relatedTestId: testId,
+        relatedTestId: idOf(test),
       }))
     );
 
     return { sentCount: recipientIds.length };
   },
 
-  async close(id: string, ctx: AuthContext): Promise<TestApiShape> {
-    const updated = await testRepository.update(id, ctx.instituteId, { status: 'closed' } as never);
-    if (!updated) throw new NotFoundError('Test');
-    return toTestApiShape(updated);
+  async closeAssignment(assignmentId: string, ctx: AuthContext): Promise<TestAssignmentApiShape> {
+    const updated = await testAssignmentRepository.close(assignmentId, ctx.instituteId);
+    if (!updated) throw new NotFoundError('Test assignment');
+    return toAssignmentApiShape(updated);
   },
 
   /** Faculty see only their own tests (drafts/pending/etc. from other faculty aren't
    *  theirs to browse); TPO/admin see everything, since approval requires seeing every
    *  faculty member's pending submissions. */
-  async list(ctx: AuthContext, batch?: string): Promise<TestApiShape[]> {
-    const tests = await testRepository.findAll(ctx.instituteId, batch);
+  async list(ctx: AuthContext): Promise<TestApiShape[]> {
+    const tests = await testRepository.findAll(ctx.instituteId);
     const scoped = ctx.role === 'faculty' ? tests.filter((t) => t.createdBy === ctx.userId) : tests;
     return scoped.map(toTestApiShape);
   },
@@ -293,7 +354,8 @@ export const testService = {
   },
 
   /** Every attempt for a test, with the candidate's name and the test's own answer key
-   *  — faculty/TPO review screen only. */
+   *  — faculty/TPO review screen only. Attempts come from every assignment ever sent out
+   *  for this paper, each labeled with the sendout it came from. */
   async getReview(testId: string, ctx: AuthContext): Promise<TestAttemptReview[]> {
     const test = await testRepository.findById(testId, ctx.instituteId);
     if (!test) throw new NotFoundError('Test');
@@ -303,12 +365,19 @@ export const testService = {
     const candidates = candidateIds.length
       ? await candidateRepository.findAllForSchoolByIds(candidateIds, ctx.instituteId)
       : [];
-    const nameById = new Map(candidates.map((c) => [String((c as unknown as { _id: { toString(): string } })._id), c.fullName]));
+    const nameById = new Map(candidates.map((c) => [idOf(c), c.fullName]));
+
+    const assignmentIds = [...new Set(attempts.map((a) => a.assignmentId))];
+    const assignments = await Promise.all(assignmentIds.map((id) => testAssignmentRepository.findById(id, ctx.instituteId)));
+    const labelById = new Map(
+      assignments.filter((a): a is NonNullable<typeof a> => !!a).map((a) => [idOf(a), assignmentLabel(a)])
+    );
 
     return attempts.map((a) => ({
       attempt: toAttemptApiShape(a),
       candidateName: nameById.get(a.candidateId) ?? 'Unknown',
       test: toTestApiShape(test),
+      assignmentLabel: labelById.get(a.assignmentId),
     }));
   },
 
@@ -319,21 +388,24 @@ export const testService = {
     const candidate = await candidateRepository.findById(candidateId, ctx.instituteId);
     if (!candidate) throw new NotFoundError('Candidate');
 
-    const tests = await testRepository.findPublishedForBatch(ctx.instituteId, candidate.batch);
+    const assignments = await testAssignmentRepository.findActiveFor(ctx.instituteId, candidateId, candidate.batch);
     const results: TestForCandidate[] = [];
-    for (const t of tests) {
-      const attempt = await testAttemptRepository.findByTestAndCandidate(String((t as unknown as { _id: { toString(): string } })._id), candidateId, ctx.instituteId);
+    for (const a of assignments) {
+      const test = await testRepository.findById(a.testId, ctx.instituteId);
+      if (!test) continue;
+      const assignmentId = idOf(a);
+      const attempt = await testAttemptRepository.findByAssignmentAndCandidate(assignmentId, candidateId, ctx.instituteId);
       results.push({
-        _id: String((t as unknown as { _id: { toString(): string } })._id),
-        title: t.title,
-        batch: t.batch,
-        track: t.track,
-        totalMarks: t.totalMarks,
-        durationMinutes: t.durationMinutes,
-        violationLimit: t.violationLimit,
-        questionCount: t.questions.length,
-        scheduledAt: t.scheduledAt ? new Date(t.scheduledAt).toISOString() : undefined,
-        codeIssued: !!t.accessCodeIssuedAt,
+        _id: assignmentId,
+        title: test.title,
+        batch: a.targetType === 'batch' ? a.batch : undefined,
+        track: test.track,
+        totalMarks: test.totalMarks,
+        durationMinutes: test.durationMinutes,
+        violationLimit: test.violationLimit,
+        questionCount: test.questions.length,
+        scheduledAt: a.scheduledAt ? new Date(a.scheduledAt).toISOString() : undefined,
+        codeIssued: !!a.accessCodeIssuedAt,
         attemptStatus: attempt?.status,
         score: attempt?.status === 'submitted' ? attempt.score : undefined,
       });
@@ -341,32 +413,39 @@ export const testService = {
     return results;
   },
 
-  async start(testId: string, rawInput: unknown, ctx: AuthContext): Promise<StartTestAttemptResult> {
+  async start(assignmentId: string, rawInput: unknown, ctx: AuthContext): Promise<StartTestAttemptResult> {
     const candidateId = await resolveCandidateId(ctx);
     const candidate = await candidateRepository.findById(candidateId, ctx.instituteId);
     if (!candidate) throw new NotFoundError('Candidate');
 
-    const test = await testRepository.findById(testId, ctx.instituteId);
-    if (!test || test.status !== 'published' || test.batch !== candidate.batch) throw new NotFoundError('Test');
-    if (test.scheduledAt && new Date() < new Date(test.scheduledAt)) {
-      throw new ForbiddenError(`This test opens at ${new Date(test.scheduledAt).toLocaleString()}`);
+    const assignment = await testAssignmentRepository.findById(assignmentId, ctx.instituteId);
+    const eligible =
+      !!assignment &&
+      assignment.status === 'active' &&
+      (assignment.targetType === 'batch' ? assignment.batch === candidate.batch : assignment.candidateIds?.includes(candidateId));
+    if (!assignment || !eligible) throw new NotFoundError('Test');
+
+    const test = await testRepository.findById(assignment.testId, ctx.instituteId);
+    if (!test) throw new NotFoundError('Test');
+    if (assignment.scheduledAt && new Date() < new Date(assignment.scheduledAt)) {
+      throw new ForbiddenError(`This test opens at ${new Date(assignment.scheduledAt).toLocaleString()}`);
     }
 
-    let attempt = await testAttemptRepository.findByTestAndCandidate(testId, candidateId, ctx.instituteId);
+    let attempt = await testAttemptRepository.findByAssignmentAndCandidate(assignmentId, candidateId, ctx.instituteId);
     if (attempt && attempt.status === 'submitted') throw new ForbiddenError('You have already submitted this test');
 
     // A returning candidate resuming an in-progress attempt doesn't need to re-enter the code —
     // only the very first start of an attempt is gated on it.
     if (!attempt) {
-      if (!test.accessCodeHash) {
+      if (!assignment.accessCodeHash) {
         throw new ForbiddenError('This test has not been unlocked yet — wait for your access code from your TPO/faculty.');
       }
 
       const { accessCode } = startTestSchema.parse(rawInput);
-      const isValid = await bcrypt.compare(accessCode, test.accessCodeHash);
+      const isValid = await bcrypt.compare(accessCode, assignment.accessCodeHash);
       if (!isValid) throw new ForbiddenError('Incorrect access code');
 
-      attempt = await testAttemptRepository.create(ctx.instituteId, testId, candidateId);
+      attempt = await testAttemptRepository.create(ctx.instituteId, assignment.testId, assignmentId, candidateId);
     }
 
     return {

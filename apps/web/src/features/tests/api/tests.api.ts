@@ -5,6 +5,9 @@ import type {
   CreateTestPayload,
   GenerateTestDraftPayload,
   ReviewTestPayload,
+  TestAssignment,
+  TestAssignmentWithTest,
+  CreateAssignmentPayload,
   TestForCandidate,
   StartTestAttemptResult,
   StartTestPayload,
@@ -29,9 +32,9 @@ export const testsApi = {
     } catch (err) { throw new Error(extractErrorMessage(err)); }
   },
 
-  async list(batch?: string): Promise<Test[]> {
+  async list(): Promise<Test[]> {
     try {
-      const res = await apiClient.get<ApiResponse<Test[]>>(BASE, { params: batch ? { batch } : {} });
+      const res = await apiClient.get<ApiResponse<Test[]>>(BASE);
       return res.data.data ?? [];
     } catch (err) { throw new Error(extractErrorMessage(err)); }
   },
@@ -64,23 +67,37 @@ export const testsApi = {
     } catch (err) { throw new Error(extractErrorMessage(err)); }
   },
 
-  async publish(id: string): Promise<Test> {
+  async createAssignment(testId: string, payload: CreateAssignmentPayload): Promise<TestAssignment> {
     try {
-      const res = await apiClient.patch<ApiResponse<Test>>(`${BASE}/${id}/publish`);
+      const res = await apiClient.post<ApiResponse<TestAssignment>>(`${BASE}/${testId}/assignments`, payload);
       return res.data.data!;
     } catch (err) { throw new Error(extractErrorMessage(err)); }
   },
 
-  async sendAccessCode(id: string, payload: SendAccessCodePayload): Promise<{ sentCount: number }> {
+  async listAssignments(testId: string): Promise<TestAssignment[]> {
     try {
-      const res = await apiClient.post<ApiResponse<{ sentCount: number }>>(`${BASE}/${id}/send-access-code`, payload);
+      const res = await apiClient.get<ApiResponse<TestAssignment[]>>(`${BASE}/${testId}/assignments`);
+      return res.data.data ?? [];
+    } catch (err) { throw new Error(extractErrorMessage(err)); }
+  },
+
+  async listAllAssignments(): Promise<TestAssignmentWithTest[]> {
+    try {
+      const res = await apiClient.get<ApiResponse<TestAssignmentWithTest[]>>(`${BASE}/assignments`);
+      return res.data.data ?? [];
+    } catch (err) { throw new Error(extractErrorMessage(err)); }
+  },
+
+  async sendAssignmentAccessCode(assignmentId: string, payload: SendAccessCodePayload): Promise<{ sentCount: number }> {
+    try {
+      const res = await apiClient.post<ApiResponse<{ sentCount: number }>>(`${BASE}/assignments/${assignmentId}/send-access-code`, payload);
       return res.data.data!;
     } catch (err) { throw new Error(extractErrorMessage(err)); }
   },
 
-  async close(id: string): Promise<Test> {
+  async closeAssignment(assignmentId: string): Promise<TestAssignment> {
     try {
-      const res = await apiClient.patch<ApiResponse<Test>>(`${BASE}/${id}/close`);
+      const res = await apiClient.patch<ApiResponse<TestAssignment>>(`${BASE}/assignments/${assignmentId}/close`);
       return res.data.data!;
     } catch (err) { throw new Error(extractErrorMessage(err)); }
   },
@@ -106,9 +123,9 @@ export const testsApi = {
     } catch (err) { throw new Error(extractErrorMessage(err)); }
   },
 
-  async start(testId: string, payload: StartTestPayload): Promise<StartTestAttemptResult> {
+  async start(assignmentId: string, payload: StartTestPayload): Promise<StartTestAttemptResult> {
     try {
-      const res = await apiClient.post<ApiResponse<StartTestAttemptResult>>(`${BASE}/${testId}/start`, payload);
+      const res = await apiClient.post<ApiResponse<StartTestAttemptResult>>(`${BASE}/assignments/${assignmentId}/start`, payload);
       return res.data.data!;
     } catch (err) { throw new Error(extractErrorMessage(err)); }
   },

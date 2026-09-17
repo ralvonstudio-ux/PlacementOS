@@ -34,13 +34,10 @@ const testQuestionSchema = z
 
 export const createTestSchema = z.object({
   title: z.string().min(1).trim(),
-  batch: z.string().min(1).trim(),
   track: z.string().trim().optional(),
   questions: z.array(testQuestionSchema).min(1, 'Add at least one question'),
   durationMinutes: z.number().int().min(1),
   violationLimit: z.number().int().min(1).default(3),
-  /** Optional — blocks `start` until this instant even once the test is published. */
-  scheduledAt: z.coerce.date().optional(),
   contentName: z.string().trim().optional(),
   topic: z.string().trim().optional(),
   sourceContent: z.string().optional(),
@@ -49,6 +46,20 @@ export const createTestSchema = z.object({
 });
 
 export const updateTestSchema = createTestSchema.partial();
+
+export const createAssignmentSchema = z
+  .object({
+    targetType: z.enum(['batch', 'candidates']),
+    batch: z.string().trim().optional(),
+    candidateIds: z.array(z.string().min(1)).optional(),
+    /** Optional — blocks `start` until this instant even while the assignment is active. */
+    scheduledAt: z.coerce.date().optional(),
+  })
+  .refine((v) => (v.targetType === 'batch' ? !!v.batch?.trim() : true), { message: 'A batch is required for a batch assignment', path: ['batch'] })
+  .refine((v) => (v.targetType === 'candidates' ? !!v.candidateIds?.length : true), {
+    message: 'Select at least one candidate for a specific-students assignment',
+    path: ['candidateIds'],
+  });
 
 export const startTestSchema = z.object({
   accessCode: z.string().trim().min(1, 'Enter the access code from your notification'),
@@ -60,7 +71,6 @@ export const sendAccessCodeSchema = z.object({
 
 export const generateTestDraftSchema = z.object({
   title: z.string({ required_error: 'title is required' }).min(1).trim(),
-  batch: z.string({ required_error: 'batch is required' }).min(1).trim(),
   track: z.string().trim().optional(),
   contentName: z.string({ required_error: 'contentName is required' }).min(1).trim(),
   topic: z.string({ required_error: 'topic is required' }).min(1).trim(),
@@ -110,6 +120,7 @@ export const logViolationSchema = z.object({
 
 export type CreateTestInput = z.infer<typeof createTestSchema>;
 export type UpdateTestInput = z.infer<typeof updateTestSchema>;
+export type CreateAssignmentInput = z.infer<typeof createAssignmentSchema>;
 export type StartTestInput = z.infer<typeof startTestSchema>;
 export type SendAccessCodeInput = z.infer<typeof sendAccessCodeSchema>;
 export type GenerateTestDraftInput = z.infer<typeof generateTestDraftSchema>;
