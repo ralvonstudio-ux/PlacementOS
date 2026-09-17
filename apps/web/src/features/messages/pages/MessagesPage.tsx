@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import { KeyRound, MessageSquare, Send, Loader2, CheckCircle2, Inbox, CheckCheck, X, AlertTriangle, Users, GraduationCap } from 'lucide-react';
 import { PageContainer } from '@/components/workspace/PageContainer';
@@ -15,6 +16,7 @@ import {
   useBroadcastRecipients,
 } from '@/features/notifications/hooks/useNotifications';
 import { extractErrorMessage } from '@/services/api';
+import { candidatesApi } from '@/features/candidates/api/candidates.api';
 import { CandidatePicker } from '../components/CandidatePicker';
 import { FacultyPicker } from '../components/FacultyPicker';
 import type { NotificationType } from '@placementos/types';
@@ -185,6 +187,7 @@ function StaffMessagesView() {
   // ── Send Message ──────────────────────────────────────────────────────────
   const [audience, setAudience] = useState<'students' | 'faculty' | 'both'>('students');
   const [priority, setPriority] = useState<'normal' | 'high'>('normal');
+  const { data: batches = [] } = useQuery({ queryKey: ['messages', 'batches'], queryFn: candidatesApi.listBatches });
   const [batch, setBatch] = useState('');
   const [msgRecipients, setMsgRecipients] = useState<Set<string>>(new Set());
   const [facultyRecipients, setFacultyRecipients] = useState<Set<string>>(new Set());
@@ -333,8 +336,12 @@ function StaffMessagesView() {
 
             {includesStudents && (
               <div>
-                <label className="block text-xs text-gray-500 mb-1">Batch</label>
-                <input value={batch} onChange={(e) => { setBatch(e.target.value); setMsgRecipients(new Set()); }} placeholder="e.g. 2026-CSE" className={inputCls} />
+                <label className="block text-xs text-gray-500 mb-1">Batch / Class</label>
+                <select value={batch} onChange={(e) => { setBatch(e.target.value); setMsgRecipients(new Set()); }} className={inputCls}>
+                  <option value="">Select a batch…</option>
+                  {batches.map((b) => <option key={b} value={b}>{b}</option>)}
+                </select>
+                {batches.length === 0 && <p className="text-xs text-amber-600 mt-1.5">No batches found yet — add candidates first.</p>}
                 {batch && (
                   <div className="border border-gray-100 rounded-xl p-3 mt-2">
                     <CandidatePicker batch={batch} selected={msgRecipients} onChange={setMsgRecipients} />
