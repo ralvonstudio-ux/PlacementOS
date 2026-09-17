@@ -18,6 +18,7 @@ if (env.NODE_ENV === 'development') {
 
 // Protected
 router.get('/me', authenticate, authController.me);
+router.patch('/me', authenticate, authController.updateMe);
 router.post('/logout', authenticate, authController.logout);
 router.post('/change-password', authenticate, authController.changePassword);
 

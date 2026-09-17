@@ -5,6 +5,7 @@ import { Sidebar } from '@/components/sidebar/Sidebar';
 import { BottomNav } from '@/components/sidebar/BottomNav';
 import { Topbar } from '@/components/topbar/Topbar';
 import { useAuth } from '@/features/auth/hooks/useAuth';
+import { HighPriorityMessageOverlay } from '@/features/notifications/components/HighPriorityMessageOverlay';
 import { cn } from '@/lib/utils';
 
 export function AppLayout() {
@@ -29,8 +30,12 @@ export function AppLayout() {
     mainRef.current?.scrollTo(0, 0);
   }, [location.pathname]);
 
+  const canReceiveMessages = user?.role === 'candidate' || user?.role === 'faculty';
+
   return (
     <div className={cn('flex h-screen overflow-hidden bg-white')}>
+      {canReceiveMessages && <HighPriorityMessageOverlay />}
+
       {sidebarOpen && (
         <div
           className="fixed inset-0 z-20 bg-black/20 backdrop-blur-sm lg:hidden"
