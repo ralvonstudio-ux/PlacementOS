@@ -29,6 +29,13 @@ export const candidateRepository = {
     return Candidate.findOne({ rollNumber, instituteId, isDeleted: false });
   },
 
+  /** Every distinct batch/class with at least one active candidate — backs batch pickers
+   *  (e.g. the Messages "Send to students" dropdown) instead of staff typing a batch by hand. */
+  async findDistinctBatches(instituteId: string): Promise<string[]> {
+    const batches = await Candidate.distinct('batch', { instituteId, isDeleted: false, status: 'active' });
+    return (batches as string[]).sort((a, b) => a.localeCompare(b));
+  },
+
   async findByLoginEmail(loginEmail: string, instituteId: string): Promise<ICandidate | null> {
     return Candidate.findOne({ loginEmail, instituteId, isDeleted: false }).lean<ICandidate>();
   },

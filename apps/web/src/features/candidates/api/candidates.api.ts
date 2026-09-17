@@ -41,6 +41,15 @@ export const candidatesApi = {
     } catch (err) { throw new Error(extractErrorMessage(err)); }
   },
 
+  /** Every distinct batch/class with at least one active candidate — backs batch dropdowns
+   *  (e.g. Messages' "Send to students" picker) instead of staff typing a batch by hand. */
+  async listBatches(): Promise<string[]> {
+    try {
+      const res = await apiClient.get<ApiResponse<string[]>>(`${BASE}/batches`);
+      return res.data.data ?? [];
+    } catch (err) { throw new Error(extractErrorMessage(err)); }
+  },
+
   async create(payload: CreateCandidatePayload): Promise<Candidate> {
     try {
       const res = await apiClient.post<ApiResponse<Candidate>>(BASE, payload);
