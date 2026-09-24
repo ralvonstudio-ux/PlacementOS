@@ -8,6 +8,7 @@ import { useTpoDashboard, useBriefingSummary } from '../hooks/useTpo';
 import { AttendanceWidget } from '../components/AttendanceWidget';
 import { AlertsPanel } from '../components/AlertsPanel';
 import { AttendanceInsightsCard } from '../components/AttendanceInsightsCard';
+import { TrainerFeedbackOverviewCard } from '@/features/trainer-feedback/components/TrainerFeedbackOverviewCard';
 import { extractErrorMessage } from '@/services/api';
 
 function StatCard({ icon: Icon, label, value, sub, accent }: { icon: typeof Users; label: string; value: string | number; sub?: string; accent: string }) {
@@ -102,7 +103,10 @@ export function TpoDashboardPage() {
           </div>
         </div>
 
-        <AttendanceInsightsCard />
+        <div className="space-y-6">
+          <AttendanceInsightsCard />
+          <TrainerFeedbackOverviewCard />
+        </div>
       </div>
     </PageContainer>
   );

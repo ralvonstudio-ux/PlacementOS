@@ -1782,3 +1782,69 @@ export interface ExtractContentResult {
   text: string;
   fileName?: string;
 }
+
+// ── Trainer Feedback (replaces the Google Form + Excel export workflow) ───
+export interface TrainerFeedbackRatings {
+  subjectKnowledge: number;
+  teachingQuality: number;
+  communication: number;
+  punctuality: number;
+}
+
+export interface TrainerFeedback {
+  _id: string;
+  instituteId: string;
+  facultyId: string;
+  candidateId: string;
+  batch: string;
+  track: string;
+  isAnonymous: boolean;
+  ratings: TrainerFeedbackRatings;
+  overallRating: number;
+  comment?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateTrainerFeedbackPayload {
+  facultyId: string;
+  track: string;
+  isAnonymous: boolean;
+  ratings: TrainerFeedbackRatings;
+  comment?: string;
+}
+
+/** A trainer the logged-in candidate can submit feedback for, joined from their batch's
+ *  training schedule. One row per (trainer, track) pair — a trainer teaching a student
+ *  more than one subject gets a separate feedback prompt per subject. */
+export interface TrainerFeedbackEligibleTrainer {
+  facultyId: string;
+  facultyName: string;
+  department?: string;
+  track: string;
+  alreadySubmitted: boolean;
+}
+
+export interface TrainerFeedbackListFilters {
+  facultyId?: string;
+  batch?: string;
+  track?: string;
+  from?: string;
+  to?: string;
+}
+
+/** TPO/Principal-facing feedback row — the in-app replacement for the raw Excel export.
+ *  candidateName is omitted whenever the student chose to submit anonymously. */
+export interface TrainerFeedbackListItem extends TrainerFeedback {
+  facultyName: string;
+  candidateName?: string;
+}
+
+export interface TrainerFeedbackOverviewItem {
+  facultyId: string;
+  facultyName: string;
+  department?: string;
+  responseCount: number;
+  overallRating: number;
+  avgByCriterion: TrainerFeedbackRatings;
+}

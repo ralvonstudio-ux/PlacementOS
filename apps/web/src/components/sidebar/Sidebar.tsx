@@ -25,6 +25,7 @@ import {
   Clock,
   UserCog,
   Upload,
+  Star,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
@@ -67,6 +68,7 @@ const NAV_SECTION_TPO_TIMETABLE = [
 
 const NAV_SECTION_TPO_STAFF = [
   { label: 'Trainers', icon: Users, path: '/tpo/faculty', end: false },
+  { label: 'Trainer Feedback', icon: Star, path: '/tpo/trainer-feedback', end: false },
   { label: 'Students', icon: Users2, path: '/tpo/candidates', end: false },
   { label: 'Data Import', icon: Upload, path: '/tpo/import', end: false },
 ] as const;
@@ -101,6 +103,7 @@ const NAV_ITEMS_CANDIDATE = [
   { label: 'Practice Sheets', icon: BookMarked, path: '/candidate/practice-sheets', end: false },
   { label: 'Worksheets', icon: FileCheck2, path: '/candidate/worksheets', end: false },
   { label: 'Tests', icon: ShieldCheck, path: '/candidate/tests', end: false },
+  { label: 'Trainer Feedback', icon: Star, path: '/candidate/trainer-feedback', end: false },
 ] as const;
 
 const ROLE_LABEL: Record<string, string> = {
