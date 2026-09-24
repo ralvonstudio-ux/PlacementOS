@@ -56,6 +56,15 @@ export const authController = {
     }
   },
 
+  async updateMe(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const user = await authService.updateMe(req.user!.userId, req.user!.instituteId, req.body);
+      sendSuccess(res, user, 'Profile updated');
+    } catch (err) {
+      next(err);
+    }
+  },
+
   async changePassword(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       await authService.changePassword(req.user!.userId, req.body);

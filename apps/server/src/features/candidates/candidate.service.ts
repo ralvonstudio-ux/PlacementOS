@@ -33,6 +33,10 @@ export const candidateService = {
     return candidate;
   },
 
+  async listBatches(instituteId: string): Promise<string[]> {
+    return candidateRepository.findDistinctBatches(instituteId);
+  },
+
   async create(rawInput: unknown, ctx: AuthContext): Promise<ICandidate> {
     const data = createCandidateSchema.parse(rawInput);
 

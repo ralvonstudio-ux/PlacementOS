@@ -24,6 +24,15 @@ export const candidateController = {
     }
   },
 
+  async listBatches(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const batches = await candidateService.listBatches(req.user!.instituteId);
+      sendSuccess(res, batches);
+    } catch (err) {
+      next(err);
+    }
+  },
+
   async create(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const ctx = buildAuthContext(req.user!, req.ip ?? undefined);

@@ -322,6 +322,7 @@ export const testService = {
       ctx.instituteId,
       recipientIds.map((id) => ({
         recipientId: id,
+        recipientRole: 'candidate' as const,
         type: 'test_access_code' as const,
         title: `${test.title} — access code`,
         body: `Your access code is ${code}. Enter it on the test's start screen — it works once you begin.`,

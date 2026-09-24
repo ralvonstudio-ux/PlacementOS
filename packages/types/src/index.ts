@@ -418,6 +418,11 @@ export interface ChangePasswordPayload {
   newPassword: string;
 }
 
+export interface UpdateMePayload {
+  firstName?: string;
+  lastName?: string;
+}
+
 // ── Question Bank (rich domain) ───────────────────────────────────────────
 // The stub Question/QuestionType/QuestionSource/QuestionPaper/Worksheet types above stay as-is
 // (additive-only rule) — the real question-bank feature needs a considerably richer shape (AI
@@ -1701,12 +1706,19 @@ export interface SendAccessCodePayload {
 // ── Notifications ────────────────────────────────────────────────────────────
 
 export type NotificationType = 'test_access_code' | 'staff_message';
+export type NotificationRecipientRole = 'candidate' | 'faculty';
+/** 'high' forces the recipient to acknowledge it (a blurred, unskippable overlay +
+ *  notification sound) before they can use their dashboard; 'normal' is a regular
+ *  inbox item. */
+export type NotificationPriority = 'normal' | 'high';
 
-/** Staff action: a free-form one-way announcement to chosen candidates. */
+/** Staff action: a free-form one-way announcement to chosen candidates and/or faculty. */
 export interface SendStaffMessagePayload {
   candidateIds: string[];
+  facultyIds: string[];
   title: string;
   body: string;
+  priority: NotificationPriority;
 }
 
 export interface Notification {
@@ -1715,8 +1727,33 @@ export interface Notification {
   title: string;
   body: string;
   relatedTestId?: string;
+  priority: NotificationPriority;
+  broadcastId?: string;
   readAt?: string;
+  acknowledgedAt?: string;
   createdAt: string;
+}
+
+/** Staff-facing: one row per "Send Message" action, with how many of its recipients
+ *  have acknowledged it so far (meaningful for 'high' priority — 'normal' ones don't
+ *  require acknowledgment, so this is 0/total for those). */
+export interface NotificationBroadcastSummary {
+  broadcastId: string;
+  title: string;
+  body: string;
+  priority: NotificationPriority;
+  audience: NotificationRecipientRole[];
+  recipientCount: number;
+  acknowledgedCount: number;
+  createdAt: string;
+}
+
+export interface NotificationBroadcastRecipient {
+  recipientId: string;
+  recipientRole: NotificationRecipientRole;
+  name: string;
+  acknowledgedAt?: string;
+  readAt?: string;
 }
 
 // ── Academic Plan (syllabus-driven, distinct from module-based Training Plan) ────

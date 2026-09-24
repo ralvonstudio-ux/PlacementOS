@@ -8,6 +8,7 @@ const router = Router();
 router.use(authenticate);
 
 router.get('/', candidateController.list);
+router.get('/batches', candidateController.listBatches);
 router.get('/:id', candidateController.getById);
 router.post('/', authorize('admin', 'tpo'), candidateController.create);
 router.patch('/:id', authorize('admin', 'tpo'), candidateController.update);

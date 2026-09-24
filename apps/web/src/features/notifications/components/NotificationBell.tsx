@@ -41,8 +41,9 @@ export function NotificationBell() {
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
 
-  // Only candidates receive notifications today (test access codes) — nothing to show elsewhere.
-  if (user?.role !== 'candidate') return null;
+  // Candidates and faculty both receive notifications (test access codes / staff messages) —
+  // no one else (admin/tpo) has an inbox here.
+  if (user?.role !== 'candidate' && user?.role !== 'faculty') return null;
 
   return (
     <div className="relative" ref={ref}>

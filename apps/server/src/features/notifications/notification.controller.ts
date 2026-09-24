@@ -12,6 +12,14 @@ export const notificationController = {
     } catch (err) { next(err); }
   },
 
+  async listUnacknowledged(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const ctx = buildAuthContext(req.user!, req.ip ?? undefined);
+      const result = await notificationService.listUnacknowledged(ctx);
+      sendSuccess(res, result);
+    } catch (err) { next(err); }
+  },
+
   async markRead(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const ctx = buildAuthContext(req.user!, req.ip ?? undefined);
@@ -28,11 +36,35 @@ export const notificationController = {
     } catch (err) { next(err); }
   },
 
+  async acknowledge(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const ctx = buildAuthContext(req.user!, req.ip ?? undefined);
+      const notification = await notificationService.acknowledge(req.params.id, ctx);
+      sendSuccess(res, notification, 'Acknowledged');
+    } catch (err) { next(err); }
+  },
+
   async send(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const ctx = buildAuthContext(req.user!, req.ip ?? undefined);
       const result = await notificationService.sendStaffMessage(req.body, ctx);
-      sendSuccess(res, result, `Message sent to ${result.sentCount} candidate(s)`);
+      sendSuccess(res, result, `Message sent to ${result.sentCount} recipient(s)`);
+    } catch (err) { next(err); }
+  },
+
+  async listBroadcasts(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const ctx = buildAuthContext(req.user!, req.ip ?? undefined);
+      const result = await notificationService.listBroadcasts(ctx);
+      sendSuccess(res, result);
+    } catch (err) { next(err); }
+  },
+
+  async getBroadcastRecipients(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const ctx = buildAuthContext(req.user!, req.ip ?? undefined);
+      const result = await notificationService.getBroadcastRecipients(req.params.broadcastId, ctx);
+      sendSuccess(res, result);
     } catch (err) { next(err); }
   },
 };

@@ -27,6 +27,13 @@ export const facultyRepository = {
     return Faculty.findOne({ employeeId, instituteId, isDeleted: false });
   },
 
+  /** Minimal lookup for a known set of ids — mirrors candidateRepository.findAllForSchoolByIds,
+   *  used to resolve a chosen recipient list (e.g. staff messages) into real faculty rows. */
+  async findAllForSchoolByIds(ids: string[], instituteId: string): Promise<IFaculty[]> {
+    if (ids.length === 0) return [];
+    return Faculty.find({ _id: { $in: ids }, instituteId, isDeleted: false }).select('fullName employeeId').lean<IFaculty[]>();
+  },
+
   async findAll(instituteId: string, options: FindFacultyOptions = {}): Promise<PaginatedFaculty> {
     const { page = 1, limit = 20, search, track, batch } = options;
     const skip = (page - 1) * limit;
