@@ -18,6 +18,10 @@ const testQuestionSchema = z
     allowedLanguages: z.array(codingLanguageSchema).optional(),
     starterCode: z.record(codingLanguageSchema, z.string()).optional(),
     testCases: z.array(testCaseSchema).optional(),
+    section: z.string().trim().optional(),
+    topic: z.string().trim().optional(),
+    subTopic: z.string().trim().optional(),
+    level: z.enum(['easy', 'medium', 'hard']).optional(),
   })
   .refine((v) => v.questionType !== 'mcq' || (v.options && v.options.filter((o) => o.trim()).length >= 2), {
     message: 'An MCQ question needs at least 2 options',
@@ -103,6 +107,10 @@ export const runCodeSchema = z.object({
   language: codingLanguageSchema,
 });
 
+export const markViewedSchema = z.object({
+  questionIndex: z.number().int().min(0),
+});
+
 export const logViolationSchema = z.object({
   type: z.enum([
     'tab_switch',
@@ -128,3 +136,4 @@ export type ReviewTestInput = z.infer<typeof reviewTestSchema>;
 export type SubmitAnswerInput = z.infer<typeof submitAnswerSchema>;
 export type LogViolationInput = z.infer<typeof logViolationSchema>;
 export type RunCodeInput = z.infer<typeof runCodeSchema>;
+export type MarkViewedInput = z.infer<typeof markViewedSchema>;

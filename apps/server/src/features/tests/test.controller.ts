@@ -118,9 +118,25 @@ export const testController = {
 
   async start(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const ctx = buildAuthContext(req.user!, req.ip ?? undefined);
+      const ctx = buildAuthContext(req.user!, req.ip ?? undefined, req.headers['user-agent']);
       const result = await testService.start(req.params.assignmentId, req.body, ctx);
       sendSuccess(res, result, 'Test started');
+    } catch (err) { next(err); }
+  },
+
+  async markViewed(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const ctx = buildAuthContext(req.user!, req.ip ?? undefined);
+      await testService.markViewed(req.params.attemptId, req.body, ctx);
+      sendSuccess(res, null);
+    } catch (err) { next(err); }
+  },
+
+  async getResultAnalysis(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const ctx = buildAuthContext(req.user!, req.ip ?? undefined);
+      const analysis = await testService.getResultAnalysis(req.params.id, req.params.attemptId, ctx);
+      sendSuccess(res, analysis);
     } catch (err) { next(err); }
   },
 

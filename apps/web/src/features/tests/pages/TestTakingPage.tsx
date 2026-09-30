@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { AlertTriangle, Camera, CheckCircle2, Loader2, Maximize, MonitorUp, ShieldAlert, ChevronLeft, ChevronRight } from 'lucide-react';
-import { useStartTest, useSubmitTestAnswer, useLogTestViolation, useSubmitTest } from '../hooks/useTests';
+import { useStartTest, useSubmitTestAnswer, useLogTestViolation, useSubmitTest, useMarkQuestionViewed } from '../hooks/useTests';
 import { CodingQuestionPanel } from '../components/CodingQuestionPanel';
 import { extractErrorMessage } from '@/services/api';
 import type { TestQuestionForCandidate, TestViolationType, StartTestAttemptResult, CodingLanguage } from '@placementos/types';
@@ -113,6 +113,7 @@ export function TestTakingPage() {
   const submitAnswerMutation = useSubmitTestAnswer();
   const logViolationMutation = useLogTestViolation();
   const submitTestMutation = useSubmitTest();
+  const markViewedMutation = useMarkQuestionViewed();
 
   useEffect(() => { phaseRef.current = phase; }, [phase]);
 
@@ -253,6 +254,14 @@ export function TestTakingPage() {
 
   // Release the camera/screen-share and fullscreen if the candidate navigates away mid-test.
   useEffect(() => () => { stopMediaStreams(); exitFullscreenIfActive(); }, [stopMediaStreams, exitFullscreenIfActive]);
+
+  // Best-effort telemetry: tells the result-analysis screen "Skipped" (seen, left blank) apart
+  // from "Not Viewed" (never reached). Fire-and-forget — never blocks the exam UI.
+  useEffect(() => {
+    if (phase !== 'in_progress' || !attemptIdRef.current) return;
+    markViewedMutation.mutate({ attemptId: attemptIdRef.current, payload: { questionIndex: currentIndex } });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, currentIndex]);
 
   async function handleStart() {
     if (!assignmentId) return;
@@ -404,6 +413,8 @@ export function TestTakingPage() {
               'Your camera must stay on for the full test',
               'Your screen must stay shared for the full test — stopping it is logged',
               'Browser extensions (Grammarly, ad-blockers, translators, wallets, etc.) are detected and logged — disable them before starting',
+              'Questions are shown one at a time, in an order unique to you',
+              'A watermark with your candidate ID and a live timestamp is shown on screen throughout',
               'Exceeding the violation limit auto-submits your test immediately',
             ].map((line) => (
               <li key={line} className="flex items-start gap-2.5 text-sm text-gray-600">
@@ -445,8 +456,24 @@ export function TestTakingPage() {
 
   const isCoding = question?.questionType === 'coding';
 
+  // Candidate-specific watermark — tiled across the whole screen, low-opacity and
+  // unselectable, so any screenshot or photo of the test carries who took it and when.
+  // Rendered inline (no separate clock state) since the countdown timer already forces a
+  // re-render every second while the test is in progress, keeping the timestamp live.
+  const watermarkLabel = `${session?.attempt.candidateId.slice(-8).toUpperCase() ?? ''} · ${new Date().toLocaleString()}`;
+
   return (
     <div className="min-h-screen bg-white text-gray-900 flex flex-col select-none relative" onDragStart={(e) => e.preventDefault()}>
+      <div className="fixed inset-0 z-30 pointer-events-none select-none overflow-hidden">
+        <div className="grid grid-cols-3 sm:grid-cols-5 gap-x-10 gap-y-20 -rotate-[20deg] opacity-[0.06] absolute -inset-32">
+          {Array.from({ length: 40 }).map((_, i) => (
+            <span key={i} className="text-xs font-semibold text-gray-900 whitespace-nowrap">
+              {watermarkLabel}
+            </span>
+          ))}
+        </div>
+      </div>
+
       {fullscreenLost && (
         <div className="fixed inset-0 z-50 bg-white/95 backdrop-blur-sm flex items-center justify-center p-6">
           <div className="bg-white border border-gray-100 shadow-lg rounded-2xl p-8 max-w-sm text-center">

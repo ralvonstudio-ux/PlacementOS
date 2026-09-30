@@ -14,6 +14,8 @@ export interface ITestCase {
   hidden: boolean;
 }
 
+export type QuestionDifficulty = 'easy' | 'medium' | 'hard';
+
 export interface ITestQuestionSnapshot {
   questionText: string;
   questionType: TestQuestionType;
@@ -24,6 +26,11 @@ export interface ITestQuestionSnapshot {
   allowedLanguages?: CodingLanguage[];
   starterCode?: Partial<Record<CodingLanguage, string>>;
   testCases?: ITestCase[];
+  /** Aptitude-style grouping — see TestQuestionSnapshot in @placementos/types. */
+  section?: string;
+  topic?: string;
+  subTopic?: string;
+  level?: QuestionDifficulty;
 }
 
 export interface ITest extends Document {
@@ -74,6 +81,10 @@ const testQuestionSchema = new Schema<ITestQuestionSnapshot>(
     allowedLanguages: { type: [String], enum: CODING_LANGUAGES },
     starterCode: { type: Schema.Types.Mixed },
     testCases: { type: [testCaseSchema] },
+    section: { type: String, trim: true },
+    topic: { type: String, trim: true },
+    subTopic: { type: String, trim: true },
+    level: { type: String, enum: ['easy', 'medium', 'hard'] },
   },
   { _id: false }
 );
@@ -194,6 +205,20 @@ export interface ITestAnswer {
   language?: CodingLanguage;
 }
 
+export type QuestionResultStatus = 'correct' | 'wrong' | 'partial' | 'skipped' | 'not_viewed';
+
+export interface ITestProctoringInfo {
+  ipAddresses: string[];
+  os?: string;
+  browser?: string;
+}
+
+export interface ITestQuestionResult {
+  questionIndex: number;
+  status: QuestionResultStatus;
+  marksObtained: number;
+}
+
 export interface ITestAttempt extends Document {
   instituteId: string;
   testId: string;
@@ -206,6 +231,21 @@ export interface ITestAttempt extends Document {
   violations: ITestViolation[];
   score?: number;
   status: TestAttemptStatus;
+  /** Question indexes the candidate's client reported as displayed at least once — see
+   *  TestAttempt.viewedQuestionIndexes in @placementos/types. */
+  viewedQuestionIndexes: number[];
+  /** A per-attempt permutation of the test's original question indexes, generated once when
+   *  the attempt is created — e.g. [2, 0, 1] means "this candidate's 1st question is the
+   *  paper's 3rd question". Every candidate on the same paper sees a different order, which
+   *  defeats "answer to question N is X" cheat-sheets shared between candidates. Client-facing
+   *  indexes (submitAnswer, markViewed, runCode) are always positions in this shuffled order;
+   *  they're translated back to the original index before being persisted here, so scoring
+   *  (which reads test.questions by its own original order) needs no changes. Empty on
+   *  attempts created before this field existed — callers fall back to the identity order. */
+  questionOrder: number[];
+  proctoring?: ITestProctoringInfo;
+  resumeCount: number;
+  questionResults?: ITestQuestionResult[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -226,6 +266,20 @@ const answerSchema = new Schema<ITestAnswer>(
   { _id: false }
 );
 
+const proctoringSchema = new Schema<ITestProctoringInfo>(
+  { ipAddresses: { type: [String], default: [] }, os: { type: String }, browser: { type: String } },
+  { _id: false }
+);
+
+const questionResultSchema = new Schema<ITestQuestionResult>(
+  {
+    questionIndex: { type: Number, required: true },
+    status: { type: String, enum: ['correct', 'wrong', 'partial', 'skipped', 'not_viewed'], required: true },
+    marksObtained: { type: Number, required: true },
+  },
+  { _id: false }
+);
+
 const testAttemptSchema = new Schema<ITestAttempt>(
   {
     instituteId: { type: String, required: true, index: true },
@@ -239,6 +293,11 @@ const testAttemptSchema = new Schema<ITestAttempt>(
     violations: { type: [violationSchema], default: [] },
     score: { type: Number },
     status: { type: String, enum: ['in_progress', 'submitted'], default: 'in_progress' },
+    viewedQuestionIndexes: { type: [Number], default: [] },
+    questionOrder: { type: [Number], default: [] },
+    proctoring: { type: proctoringSchema },
+    resumeCount: { type: Number, default: 0 },
+    questionResults: { type: [questionResultSchema] },
   },
   { timestamps: true, versionKey: false }
 );

@@ -14,6 +14,7 @@ router.post('/attempts/:attemptId/answers', authorize('candidate'), testControll
 router.post('/attempts/:attemptId/violations', authorize('candidate'), testController.logViolation);
 router.post('/attempts/:attemptId/submit', authorize('candidate'), testController.submit);
 router.post('/attempts/:attemptId/run', authorize('candidate'), testController.runCode);
+router.post('/attempts/:attemptId/viewed', authorize('candidate'), testController.markViewed);
 
 // Staff — assignment (sendout) management. Static prefix registered before the paper-level
 // `/:id/...` routes below so `/tests/assignments/...` never gets swallowed by `:id`.
@@ -32,5 +33,6 @@ router.post('/:id/assignments', authorize('admin', 'tpo', 'faculty'), testContro
 router.get('/:id/assignments', authorize('admin', 'tpo', 'faculty'), testController.listAssignments);
 router.delete('/:id', authorize('admin', 'tpo', 'faculty'), testController.remove);
 router.get('/:id/review', authorize('admin', 'tpo', 'faculty'), testController.getReview);
+router.get('/:id/attempts/:attemptId/analysis', authorize('admin', 'tpo', 'faculty'), testController.getResultAnalysis);
 
 export default router;
