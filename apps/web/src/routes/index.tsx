@@ -61,6 +61,7 @@ const TpoPracticeLibraryPage = lazyWithReload(() => import('@/features/practice/
 const TpoTestsPage = lazyWithReload(() => import('@/features/tests/pages/TpoTestsPage').then((m) => ({ default: m.TpoTestsPage })), 'TpoTestsPage');
 const TestBuilderPage = lazyWithReload(() => import('@/features/tests/pages/TestBuilderPage').then((m) => ({ default: m.TestBuilderPage })), 'TestBuilderPage');
 const TestReviewPage = lazyWithReload(() => import('@/features/tests/pages/TestReviewPage').then((m) => ({ default: m.TestReviewPage })), 'TestReviewPage');
+const TestMonitorPage = lazyWithReload(() => import('@/features/tests/pages/TestMonitorPage').then((m) => ({ default: m.TestMonitorPage })), 'TestMonitorPage');
 const TestResultAnalysisPage = lazyWithReload(() => import('@/features/tests/pages/TestResultAnalysisPage').then((m) => ({ default: m.TestResultAnalysisPage })), 'TestResultAnalysisPage');
 const TpoTrainerFeedbackPage = lazyWithReload(() => import('@/features/trainer-feedback/pages/TpoTrainerFeedbackPage').then((m) => ({ default: m.TpoTrainerFeedbackPage })), 'TpoTrainerFeedbackPage');
 
@@ -71,6 +72,7 @@ const PracticeBrowsePage = lazyWithReload(() => import('@/features/practice/page
 const CandidatePracticeSheetsPage = lazyWithReload(() => import('@/features/practice/pages/CandidatePracticeSheetsPage').then((m) => ({ default: m.CandidatePracticeSheetsPage })), 'CandidatePracticeSheetsPage');
 const CandidateWorksheetsPage = lazyWithReload(() => import('@/features/worksheet-generator/pages/CandidateWorksheetsPage').then((m) => ({ default: m.CandidateWorksheetsPage })), 'CandidateWorksheetsPage');
 const TestListPage = lazyWithReload(() => import('@/features/tests/pages/TestListPage').then((m) => ({ default: m.TestListPage })), 'TestListPage');
+const MyTestResultPage = lazyWithReload(() => import('@/features/tests/pages/MyTestResultPage').then((m) => ({ default: m.MyTestResultPage })), 'MyTestResultPage');
 const TestTakingPage = lazyWithReload(() => import('@/features/tests/pages/TestTakingPage').then((m) => ({ default: m.TestTakingPage })), 'TestTakingPage');
 const CandidateTrainerFeedbackPage = lazyWithReload(() => import('@/features/trainer-feedback/pages/CandidateTrainerFeedbackPage').then((m) => ({ default: m.CandidateTrainerFeedbackPage })), 'CandidateTrainerFeedbackPage');
 
@@ -133,6 +135,7 @@ export const router = createBrowserRouter([
                   { path: 'tests/new', element: <FacultyTestBuilderPage /> },
                   { path: 'tests/:id/review', element: <FacultyTestReviewPage /> },
                   { path: 'tests/:id/attempts/:attemptId/analysis', element: <FacultyTestResultAnalysisPage /> },
+                  { path: 'tests/:id/monitor', element: <TestMonitorPage /> },
                   { path: 'profile', element: <FacultyProfilePage /> },
                 ],
               },
@@ -171,6 +174,7 @@ export const router = createBrowserRouter([
                   { path: 'tests/new', element: <TestBuilderPage /> },
                   { path: 'tests/:id/review', element: <TestReviewPage /> },
                   { path: 'tests/:id/attempts/:attemptId/analysis', element: <TestResultAnalysisPage /> },
+                  { path: 'tests/:id/monitor', element: <TestMonitorPage /> },
                   { path: 'trainer-feedback', element: <TpoTrainerFeedbackPage /> },
                 ],
               },
@@ -186,6 +190,7 @@ export const router = createBrowserRouter([
                   { path: 'practice-sheets', element: <CandidatePracticeSheetsPage /> },
                   { path: 'worksheets', element: <CandidateWorksheetsPage /> },
                   { path: 'tests', element: <TestListPage /> },
+                  { path: 'tests/:assignmentId/result', element: <MyTestResultPage /> },
                   { path: 'trainer-feedback', element: <CandidateTrainerFeedbackPage /> },
                 ],
               },

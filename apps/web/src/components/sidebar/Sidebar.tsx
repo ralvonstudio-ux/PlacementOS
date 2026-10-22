@@ -82,6 +82,8 @@ const NAV_SECTION_ADMIN = [
   { label: 'Dashboard', icon: LayoutDashboard, path: '/admin', end: true },
   { label: 'Faculty', icon: Users, path: '/admin/faculty', end: false },
   { label: 'Candidates', icon: Users2, path: '/admin/candidates', end: false },
+  // Admins share the TPO test pages (the /tpo area admits admins) — create, approve, monitor.
+  { label: 'Tests & Monitoring', icon: ShieldCheck, path: '/tpo/tests', end: false },
 ] as const;
 
 const NAV_SECTIONS_TPO = [

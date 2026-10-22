@@ -44,6 +44,7 @@ const testQuestionSchema = z
 const testSectionSchema = z.object({
   title: z.string().trim().min(1, 'Every section needs a title'),
   description: z.string().trim().optional(),
+  pickCount: z.number().int().min(1).optional(),
 });
 
 const testBodySchema = z.object({
@@ -55,6 +56,7 @@ const testBodySchema = z.object({
   questions: z.array(testQuestionSchema).min(1, 'Add at least one question'),
   durationMinutes: z.number().int().min(1),
   violationLimit: z.number().int().min(1).default(3),
+  allowedFullscreenExits: z.number().int().min(0).max(10).default(1),
   contentName: z.string().trim().optional(),
   topic: z.string().trim().optional(),
   sourceContent: z.string().optional(),
@@ -68,9 +70,26 @@ const sectionIndexesValid = (v: { sections?: { title: string }[]; questions?: { 
   !v.questions || v.questions.every((q) => q.sectionIndex < Math.max(1, v.sections?.length ?? 0));
 const SECTION_INDEX_ERROR = { message: 'A question belongs to a section that does not exist', path: ['questions'] };
 
-export const createTestSchema = testBodySchema.refine(sectionIndexesValid, SECTION_INDEX_ERROR);
+// A pooled section (pickCount below its question count) hands different candidates different
+// questions — they must all carry the same marks, or candidates' papers wouldn't be out of the
+// same total. A pickCount above the section's size is meaningless and rejected too.
+const poolsValid = (v: { sections?: { pickCount?: number }[]; questions?: { sectionIndex: number; marks: number }[] }) => {
+  if (!v.sections || !v.questions) return true;
+  return v.sections.every((s, si) => {
+    if (!s.pickCount) return true;
+    const qs = v.questions!.filter((q) => q.sectionIndex === si);
+    if (s.pickCount > qs.length) return false;
+    return s.pickCount === qs.length || qs.every((q) => q.marks === qs[0].marks);
+  });
+};
+const POOL_ERROR = {
+  message: "A section's 'questions per candidate' can't exceed its question count, and a pooled section's questions must all carry the same marks",
+  path: ['sections'],
+};
 
-export const updateTestSchema = testBodySchema.partial().refine(sectionIndexesValid, SECTION_INDEX_ERROR);
+export const createTestSchema = testBodySchema.refine(sectionIndexesValid, SECTION_INDEX_ERROR).refine(poolsValid, POOL_ERROR);
+
+export const updateTestSchema = testBodySchema.partial().refine(sectionIndexesValid, SECTION_INDEX_ERROR).refine(poolsValid, POOL_ERROR);
 
 export const createAssignmentSchema = z
   .object({
@@ -145,6 +164,7 @@ export const logViolationSchema = z.object({
     'no_face',
     'screen_share_stopped',
     'extension_detected',
+    'multiple_screens',
   ]),
   detail: z.string().trim().max(300).optional(),
 });
