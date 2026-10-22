@@ -1,5 +1,5 @@
-import { useParams } from 'react-router-dom';
-import { ShieldAlert, AlertTriangle, CheckCircle2, Clock } from 'lucide-react';
+import { useParams, useLocation, Link } from 'react-router-dom';
+import { ShieldAlert, AlertTriangle, CheckCircle2, Clock, BarChart3 } from 'lucide-react';
 import { PageContainer } from '@/components/workspace/PageContainer';
 import { WorkspaceHeader } from '@/components/workspace/WorkspaceHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -7,8 +7,10 @@ import { useTestReview } from '../hooks/useTests';
 
 export function TestReviewPage() {
   const { id } = useParams<{ id: string }>();
+  const location = useLocation();
   const { data: review = [], isLoading } = useTestReview(id ?? null);
   const test = review[0]?.test;
+  const basePath = location.pathname.replace(/\/review$/, '');
 
   return (
     <PageContainer>
@@ -44,6 +46,14 @@ export function TestReviewPage() {
                     <span className="inline-flex items-center gap-1 text-xs font-semibold text-red-700 bg-red-50 px-2.5 py-1 rounded-full">
                       <ShieldAlert className="w-3.5 h-3.5" /> Auto-submitted
                     </span>
+                  )}
+                  {r.attempt.status === 'submitted' && (
+                    <Link
+                      to={`${basePath}/attempts/${r.attempt._id}/analysis`}
+                      className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 transition-colors"
+                    >
+                      <BarChart3 className="w-3.5 h-3.5" /> Result &amp; Analysis
+                    </Link>
                   )}
                 </div>
               </div>

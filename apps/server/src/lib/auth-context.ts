@@ -4,6 +4,7 @@ export interface AuthContext {
   displayName: string;
   role: string;
   ip?: string;
+  userAgent?: string;
 }
 
 export const buildAuthContext = (
@@ -14,11 +15,13 @@ export const buildAuthContext = (
     lastName: string;
     role: string;
   },
-  ip?: string
+  ip?: string,
+  userAgent?: string
 ): AuthContext => ({
   userId: user.userId,
   instituteId: user.instituteId,
   displayName: `${user.firstName} ${user.lastName}`,
   role: user.role,
   ip,
+  userAgent,
 });

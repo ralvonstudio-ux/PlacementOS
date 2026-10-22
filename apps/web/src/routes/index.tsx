@@ -31,6 +31,7 @@ const FacultyProfilePage = lazyWithReload(() => import('@/features/faculty-works
 const FacultyTestsPage = lazyWithReload(() => import('@/features/tests/pages/TpoTestsPage').then((m) => ({ default: m.TpoTestsPage })), 'TpoTestsPage');
 const FacultyTestBuilderPage = lazyWithReload(() => import('@/features/tests/pages/TestBuilderPage').then((m) => ({ default: m.TestBuilderPage })), 'TestBuilderPage');
 const FacultyTestReviewPage = lazyWithReload(() => import('@/features/tests/pages/TestReviewPage').then((m) => ({ default: m.TestReviewPage })), 'TestReviewPage');
+const FacultyTestResultAnalysisPage = lazyWithReload(() => import('@/features/tests/pages/TestResultAnalysisPage').then((m) => ({ default: m.TestResultAnalysisPage })), 'TestResultAnalysisPage');
 
 // ── Admin pages ────────────────────────────────────────────────────────────
 const AdminDashboardPage = lazyWithReload(() => import('@/features/admin/pages/AdminDashboardPage').then((m) => ({ default: m.AdminDashboardPage })), 'AdminDashboardPage');
@@ -60,6 +61,8 @@ const TpoPracticeLibraryPage = lazyWithReload(() => import('@/features/practice/
 const TpoTestsPage = lazyWithReload(() => import('@/features/tests/pages/TpoTestsPage').then((m) => ({ default: m.TpoTestsPage })), 'TpoTestsPage');
 const TestBuilderPage = lazyWithReload(() => import('@/features/tests/pages/TestBuilderPage').then((m) => ({ default: m.TestBuilderPage })), 'TestBuilderPage');
 const TestReviewPage = lazyWithReload(() => import('@/features/tests/pages/TestReviewPage').then((m) => ({ default: m.TestReviewPage })), 'TestReviewPage');
+const TestResultAnalysisPage = lazyWithReload(() => import('@/features/tests/pages/TestResultAnalysisPage').then((m) => ({ default: m.TestResultAnalysisPage })), 'TestResultAnalysisPage');
+const TpoTrainerFeedbackPage = lazyWithReload(() => import('@/features/trainer-feedback/pages/TpoTrainerFeedbackPage').then((m) => ({ default: m.TpoTrainerFeedbackPage })), 'TpoTrainerFeedbackPage');
 
 // ── Candidate pages ──────────────────────────────────────────────────────────
 const CandidateDashboardPage = lazyWithReload(() => import('@/features/candidate-profile/pages/CandidateDashboardPage').then((m) => ({ default: m.CandidateDashboardPage })), 'CandidateDashboardPage');
@@ -69,6 +72,7 @@ const CandidatePracticeSheetsPage = lazyWithReload(() => import('@/features/prac
 const CandidateWorksheetsPage = lazyWithReload(() => import('@/features/worksheet-generator/pages/CandidateWorksheetsPage').then((m) => ({ default: m.CandidateWorksheetsPage })), 'CandidateWorksheetsPage');
 const TestListPage = lazyWithReload(() => import('@/features/tests/pages/TestListPage').then((m) => ({ default: m.TestListPage })), 'TestListPage');
 const TestTakingPage = lazyWithReload(() => import('@/features/tests/pages/TestTakingPage').then((m) => ({ default: m.TestTakingPage })), 'TestTakingPage');
+const CandidateTrainerFeedbackPage = lazyWithReload(() => import('@/features/trainer-feedback/pages/CandidateTrainerFeedbackPage').then((m) => ({ default: m.CandidateTrainerFeedbackPage })), 'CandidateTrainerFeedbackPage');
 
 // ── Shared ─────────────────────────────────────────────────────────────────
 const SettingsPage = lazyWithReload(() => import('@/features/auth/pages/SettingsPage').then((m) => ({ default: m.SettingsPage })), 'SettingsPage');
@@ -128,6 +132,7 @@ export const router = createBrowserRouter([
                   { path: 'tests', element: <FacultyTestsPage /> },
                   { path: 'tests/new', element: <FacultyTestBuilderPage /> },
                   { path: 'tests/:id/review', element: <FacultyTestReviewPage /> },
+                  { path: 'tests/:id/attempts/:attemptId/analysis', element: <FacultyTestResultAnalysisPage /> },
                   { path: 'profile', element: <FacultyProfilePage /> },
                 ],
               },
@@ -165,6 +170,8 @@ export const router = createBrowserRouter([
                   { path: 'tests', element: <TpoTestsPage /> },
                   { path: 'tests/new', element: <TestBuilderPage /> },
                   { path: 'tests/:id/review', element: <TestReviewPage /> },
+                  { path: 'tests/:id/attempts/:attemptId/analysis', element: <TestResultAnalysisPage /> },
+                  { path: 'trainer-feedback', element: <TpoTrainerFeedbackPage /> },
                 ],
               },
 
@@ -179,6 +186,7 @@ export const router = createBrowserRouter([
                   { path: 'practice-sheets', element: <CandidatePracticeSheetsPage /> },
                   { path: 'worksheets', element: <CandidateWorksheetsPage /> },
                   { path: 'tests', element: <TestListPage /> },
+                  { path: 'trainer-feedback', element: <CandidateTrainerFeedbackPage /> },
                 ],
               },
 

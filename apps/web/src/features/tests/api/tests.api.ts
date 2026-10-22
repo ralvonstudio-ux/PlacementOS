@@ -21,6 +21,8 @@ import type {
   RunCodeResult,
   SubmitCodePayload,
   SubmitCodeResult,
+  MarkViewedPayload,
+  TestResultAnalysis,
 } from '@placementos/types';
 
 const BASE = '/tests';
@@ -128,6 +130,13 @@ export const testsApi = {
     } catch (err) { throw new Error(extractErrorMessage(err)); }
   },
 
+  async getResultAnalysis(testId: string, attemptId: string): Promise<TestResultAnalysis> {
+    try {
+      const res = await apiClient.get<ApiResponse<TestResultAnalysis>>(`${BASE}/${testId}/attempts/${attemptId}/analysis`);
+      return res.data.data!;
+    } catch (err) { throw new Error(extractErrorMessage(err)); }
+  },
+
   // ── Candidate ────────────────────────────────────────────────────────────
   async listMine(): Promise<TestForCandidate[]> {
     try {
@@ -176,5 +185,13 @@ export const testsApi = {
       const res = await apiClient.post<ApiResponse<SubmitCodeResult>>(`${BASE}/attempts/${attemptId}/submit-code`, { questionIndex, ...payload }, { timeout: JUDGE_TIMEOUT_MS });
       return res.data.data!;
     } catch (err) { throw new Error(extractErrorMessage(err)); }
+  },
+
+  async markViewed(attemptId: string, payload: MarkViewedPayload): Promise<void> {
+    try {
+      await apiClient.post(`${BASE}/attempts/${attemptId}/viewed`, payload);
+    } catch {
+      // Best-effort telemetry — a failed call here shouldn't disrupt the candidate's attempt.
+    }
   },
 };

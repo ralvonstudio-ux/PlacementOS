@@ -1,9 +1,8 @@
 import { useState, useEffect, useRef, useCallback, useMemo, type ReactNode } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { AlertTriangle, Camera, CheckCircle2, Loader2, Maximize, MonitorUp, ShieldAlert, ChevronLeft, ChevronRight, Clock, Layers, FileQuestion, Send } from 'lucide-react';
-import { useStartTest, useSubmitTestAnswer, useLogTestViolation, useSubmitTest, useMyTests } from '../hooks/useTests';
+import { useStartTest, useSubmitTestAnswer, useLogTestViolation, useSubmitTest, useMyTests, useMarkQuestionViewed } from '../hooks/useTests';
 import { CodingQuestionPanel, DEFAULT_STARTER } from '../components/CodingQuestionPanel';
-import { useAuth } from '@/features/auth/hooks/useAuth';
 import { extractErrorMessage } from '@/services/api';
 import type { TestQuestionForCandidate, TestViolationType, StartTestAttemptResult, CodingLanguage, CodeSubmission } from '@placementos/types';
 
@@ -131,7 +130,6 @@ const isAnswered = (q: TestQuestionForCandidate | undefined, a: LocalAnswer | un
 export function TestTakingPage() {
   const { assignmentId } = useParams<{ assignmentId: string }>();
   const navigate = useNavigate();
-  const { user } = useAuth();
   const { data: myTests } = useMyTests();
   const listing = myTests?.find((t) => t._id === assignmentId);
 
@@ -167,6 +165,7 @@ export function TestTakingPage() {
   const submitAnswerMutation = useSubmitTestAnswer();
   const logViolationMutation = useLogTestViolation();
   const submitTestMutation = useSubmitTest();
+  const markViewedMutation = useMarkQuestionViewed();
 
   useEffect(() => { phaseRef.current = phase; }, [phase]);
 
@@ -360,6 +359,14 @@ export function TestTakingPage() {
   // Release the camera/screen-share and fullscreen if the candidate navigates away mid-test.
   useEffect(() => () => { stopMediaStreams(); exitFullscreenIfActive(); }, [stopMediaStreams, exitFullscreenIfActive]);
 
+  // Best-effort telemetry: tells the result-analysis screen "Skipped" (seen, left blank) apart
+  // from "Not Viewed" (never reached). Fire-and-forget — never blocks the exam UI.
+  useEffect(() => {
+    if (phase !== 'in_progress' || !attemptIdRef.current) return;
+    markViewedMutation.mutate({ attemptId: attemptIdRef.current, payload: { questionIndex: currentIndex } });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, currentIndex]);
+
   async function handleStart() {
     if (!assignmentId) return;
     setError('');
@@ -520,7 +527,6 @@ export function TestTakingPage() {
   const positionInSection = sectionQuestions.indexOf(currentIndex);
   const minutes = Math.floor(secondsLeft / 60);
   const seconds = secondsLeft % 60;
-  const watermark = user ? `${user.firstName} ${user.lastName} · ${user.email}` : '';
 
   if (phase === 'submitted' || phase === 'auto_submitted') {
     return (
@@ -581,6 +587,8 @@ export function TestTakingPage() {
               'Copy, paste, right-click and screenshots are blocked and logged',
               'Your camera must stay on, and your screen stay shared, for the full test',
               'Browser extensions are detected and logged — disable them all before starting',
+              'Questions within each section appear in an order unique to you',
+              'A watermark with your candidate ID and a live timestamp is shown on screen throughout',
               'Exceeding the violation limit auto-submits your test immediately',
             ].map((line) => (
               <li key={line} className="flex items-start gap-2.5 text-sm text-gray-600">
@@ -629,8 +637,24 @@ export function TestTakingPage() {
   const sampleCases = question?.testCases?.filter((tc) => !tc.hidden) ?? [];
   const isLast = currentIndex === questions.length - 1;
 
+  // Candidate-specific watermark — tiled across the whole screen, low-opacity and
+  // unselectable, so any screenshot or photo of the test carries who took it and when.
+  // Rendered inline (no separate clock state) since the countdown timer already forces a
+  // re-render every second while the test is in progress, keeping the timestamp live.
+  const watermarkLabel = `${session?.attempt.candidateId.slice(-8).toUpperCase() ?? ''} · ${new Date().toLocaleString()}`;
+
   return (
     <div className="h-screen bg-gray-50 text-gray-900 flex flex-col select-none relative overflow-hidden" onDragStart={(e) => e.preventDefault()}>
+      <div className="fixed inset-0 z-30 pointer-events-none select-none overflow-hidden">
+        <div className="grid grid-cols-3 sm:grid-cols-5 gap-x-10 gap-y-20 -rotate-[20deg] opacity-[0.06] absolute -inset-32">
+          {Array.from({ length: 40 }).map((_, i) => (
+            <span key={i} className="text-xs font-semibold text-gray-900 whitespace-nowrap">
+              {watermarkLabel}
+            </span>
+          ))}
+        </div>
+      </div>
+
       {fullscreenLost && (
         <div className="fixed inset-0 z-50 bg-white/95 backdrop-blur-sm flex items-center justify-center p-6">
           <div className="bg-white border border-gray-100 shadow-lg rounded-2xl p-8 max-w-sm text-center">
@@ -720,13 +744,6 @@ export function TestTakingPage() {
         </aside>
 
         <main className="flex-1 min-w-0 flex flex-col px-6 py-5 overflow-y-auto relative">
-          {watermark && (
-            <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden z-0 opacity-[0.05] select-none">
-              <div className="absolute -inset-1/2 rotate-[-24deg] flex flex-wrap gap-x-24 gap-y-20 content-start text-sm font-semibold text-gray-900">
-                {Array.from({ length: 80 }, (_, i) => <span key={i}>{watermark}</span>)}
-              </div>
-            </div>
-          )}
 
           <div className="relative z-10 flex items-center justify-between mb-4">
             <span className="text-sm text-gray-500">

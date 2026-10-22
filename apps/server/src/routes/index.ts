@@ -20,6 +20,7 @@ import notificationRoutes from '../features/notifications/notification.routes';
 import contentExtractionRoutes from '../features/content-extraction/content-extraction.routes';
 import academicPlanRoutes from '../features/academic-plan/academic-plan.routes';
 import importRoutes from '../features/import/import.routes';
+import trainerFeedbackRoutes from '../features/trainer-feedback/trainer-feedback.routes';
 
 const router = Router();
 
@@ -45,5 +46,6 @@ router.use('/notifications', notificationRoutes);
 router.use('/content-extraction', contentExtractionRoutes);
 router.use('/academic-plan', academicPlanRoutes);
 router.use('/import', importRoutes);
+router.use('/trainer-feedback', trainerFeedbackRoutes);
 
 export default router;

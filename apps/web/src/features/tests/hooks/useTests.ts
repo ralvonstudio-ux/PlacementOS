@@ -11,6 +11,7 @@ import type {
   LogViolationPayload,
   RunCodePayload,
   SubmitCodePayload,
+  MarkViewedPayload,
 } from '@placementos/types';
 
 export const testKeys = {
@@ -20,6 +21,7 @@ export const testKeys = {
   mine: () => [...testKeys.all, 'mine'] as const,
   assignments: (testId: string) => [...testKeys.all, 'assignments', testId] as const,
   allAssignments: () => [...testKeys.all, 'assignments', 'all'] as const,
+  analysis: (testId: string, attemptId: string) => [...testKeys.all, 'analysis', testId, attemptId] as const,
 };
 
 export const useTestList = () =>
@@ -103,6 +105,13 @@ export const useDeleteTest = () => {
 export const useTestReview = (id: string | null) =>
   useQuery({ queryKey: testKeys.review(id ?? ''), queryFn: () => testsApi.getReview(id!), enabled: !!id });
 
+export const useTestResultAnalysis = (testId: string | null, attemptId: string | null) =>
+  useQuery({
+    queryKey: testKeys.analysis(testId ?? '', attemptId ?? ''),
+    queryFn: () => testsApi.getResultAnalysis(testId!, attemptId!),
+    enabled: !!testId && !!attemptId,
+  });
+
 export const useMyTests = () =>
   useQuery({ queryKey: testKeys.mine(), queryFn: testsApi.listMine });
 
@@ -137,3 +146,5 @@ export const useSubmitCode = () =>
 
 export const useLoadSampleTemplate = () =>
   useMutation({ mutationFn: () => testsApi.getSampleTemplate() });
+export const useMarkQuestionViewed = () =>
+  useMutation({ mutationFn: ({ attemptId, payload }: { attemptId: string; payload: MarkViewedPayload }) => testsApi.markViewed(attemptId, payload) });

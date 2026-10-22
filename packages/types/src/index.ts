@@ -1483,6 +1483,13 @@ export interface TestQuestionSnapshot {
   allowedLanguages?: CodingLanguage[];
   starterCode?: Partial<Record<CodingLanguage, string>>;
   testCases?: TestCase[];
+  /** Aptitude-style grouping, all optional — unset defaults to a single "General" section
+   *  in the result-analysis breakdown. Lets one Test mix e.g. Numerical/Verbal/Reasoning
+   *  sections the way a placement mock test does. */
+  section?: string;
+  topic?: string;
+  subTopic?: string;
+  level?: QuestionDifficulty;
 }
 
 /** Same snapshot, minus the answer key — what a candidate's client receives. */
@@ -1645,6 +1652,24 @@ export interface TestAnswer {
   submission?: CodeSubmission;
 }
 
+export type QuestionResultStatus = 'correct' | 'wrong' | 'partial' | 'skipped' | 'not_viewed';
+
+/** Best-effort device/network fingerprint captured at `start()` — mirrors the "IP Address /
+ *  OS Used / Browser Used" fields on a proctoring platform's result screen. */
+export interface TestProctoringInfo {
+  ipAddresses: string[];
+  os?: string;
+  browser?: string;
+}
+
+/** Per-question outcome, computed and persisted once at submit time so the result-analysis
+ *  screen doesn't need to re-grade the attempt on every view. */
+export interface TestQuestionResult {
+  questionIndex: number;
+  status: QuestionResultStatus;
+  marksObtained: number;
+}
+
 export interface TestAttempt {
   _id: string;
   instituteId: string;
@@ -1658,6 +1683,16 @@ export interface TestAttempt {
   violations: TestViolation[];
   score?: number;
   status: TestAttemptStatus;
+  /** Question indexes the candidate's client reported as displayed at least once — powers the
+   *  "Not Viewed" vs "Skipped" distinction in result analysis. Best-effort telemetry, not
+   *  security-relevant. */
+  viewedQuestionIndexes?: number[];
+  proctoring?: TestProctoringInfo;
+  /** Incremented each time the candidate re-enters an already-started (not yet submitted)
+   *  attempt — mirrors a proctoring platform's "Resume Count". */
+  resumeCount?: number;
+  /** Set once at submit — see TestQuestionResult. */
+  questionResults?: TestQuestionResult[];
 }
 
 /** Returned once a candidate starts a test — the question set (no answer keys) plus the attempt id. */
@@ -1739,6 +1774,89 @@ export interface TestAttemptReview {
   test: Test;
   /** Which sendout this attempt came from — a batch name or "N students". */
   assignmentLabel?: string;
+}
+
+export interface MarkViewedPayload {
+  questionIndex: number;
+}
+
+// ── Result & Analysis (Examly-style breakdown for one attempt) ──────────────────
+
+/** One row per section (or per subject/topic/subtopic, reused across the count-wise and
+ *  marks-wise breakdowns) — topper/average/least are computed across every submitted attempt
+ *  for the same test. */
+export interface TestSectionPerformance {
+  section: string;
+  totalMarks: number;
+  myScore: number;
+  topperScore: number;
+  averageScore: number;
+  leastScore: number;
+  totalQuestions: number;
+  attempted: number;
+  correct: number;
+  wrong: number;
+  partial: number;
+  skipped: number;
+  notViewed: number;
+}
+
+export interface TestTopicAnalysisRow {
+  subject: string;
+  topic: string;
+  subTopic: string;
+  accuracy: number;
+  correct: number;
+  partial: number;
+  wrong: number;
+  skipped: number;
+  notViewed: number;
+  total: number;
+}
+
+/** One question as shown on the Sections tab — the candidate's answer plus the answer key,
+ *  for TPO/faculty eyes only. */
+export interface TestResultAnalysisQuestion {
+  questionIndex: number;
+  section: string;
+  questionText: string;
+  questionType: TestQuestionType;
+  options?: string[];
+  correctAnswer?: string;
+  selectedOption?: string;
+  answerText?: string;
+  marks: number;
+  marksObtained: number;
+  status: QuestionResultStatus;
+  level?: QuestionDifficulty;
+  topic?: string;
+  subTopic?: string;
+}
+
+/** The full Result & Analysis payload for one candidate's attempt — backs
+ *  TestResultAnalysisPage's Summary and Sections tabs. */
+export interface TestResultAnalysis {
+  candidateName: string;
+  candidateEmail?: string;
+  testTitle: string;
+  track?: string;
+  ipAddresses: string[];
+  tabSwitches: number;
+  os?: string;
+  browser?: string;
+  durationSeconds: number;
+  startedAt: string;
+  submittedAt?: string;
+  resumeCount: number;
+  totalMarks: number;
+  myScore: number;
+  sections: TestSectionPerformance[];
+  totalRow: TestSectionPerformance;
+  topPerforming: string[];
+  leastPerforming: string[];
+  countWiseAnalysis: TestTopicAnalysisRow[];
+  marksWiseAnalysis: TestTopicAnalysisRow[];
+  questions: TestResultAnalysisQuestion[];
 }
 
 export interface StartTestPayload {
@@ -1867,4 +1985,70 @@ export interface AddAcademicPlanSessionPayload {
 export interface ExtractContentResult {
   text: string;
   fileName?: string;
+}
+
+// ── Trainer Feedback (replaces the Google Form + Excel export workflow) ───
+export interface TrainerFeedbackRatings {
+  subjectKnowledge: number;
+  teachingQuality: number;
+  communication: number;
+  punctuality: number;
+}
+
+export interface TrainerFeedback {
+  _id: string;
+  instituteId: string;
+  facultyId: string;
+  candidateId: string;
+  batch: string;
+  track: string;
+  isAnonymous: boolean;
+  ratings: TrainerFeedbackRatings;
+  overallRating: number;
+  comment?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateTrainerFeedbackPayload {
+  facultyId: string;
+  track: string;
+  isAnonymous: boolean;
+  ratings: TrainerFeedbackRatings;
+  comment?: string;
+}
+
+/** A trainer the logged-in candidate can submit feedback for, joined from their batch's
+ *  training schedule. One row per (trainer, track) pair — a trainer teaching a student
+ *  more than one subject gets a separate feedback prompt per subject. */
+export interface TrainerFeedbackEligibleTrainer {
+  facultyId: string;
+  facultyName: string;
+  department?: string;
+  track: string;
+  alreadySubmitted: boolean;
+}
+
+export interface TrainerFeedbackListFilters {
+  facultyId?: string;
+  batch?: string;
+  track?: string;
+  from?: string;
+  to?: string;
+}
+
+/** TPO/Principal-facing feedback row — the in-app replacement for the raw Excel export.
+ *  candidateName is omitted whenever the student chose to submit anonymously. */
+export interface TrainerFeedbackListItem extends TrainerFeedback {
+  facultyName: string;
+  candidateName?: string;
+}
+
+export interface TrainerFeedbackOverviewItem {
+  facultyId: string;
+  facultyName: string;
+  department?: string;
+  responseCount: number;
+  overallRating: number;
+  avgByCriterion: TrainerFeedbackRatings;
 }

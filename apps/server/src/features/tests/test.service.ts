@@ -13,8 +13,9 @@ import {
   reviewTestSchema,
   runCodeSchema,
   submitCodeSchema,
+  markViewedSchema,
 } from './test.validation';
-import { ITest, ITestAttempt, ITestAssignment, ITestQuestionSnapshot, ITestSection, CodingLanguage } from './test.model';
+import { ITest, ITestAttempt, ITestAssignment, ITestQuestionSnapshot, ITestSection, CodingLanguage, ITestQuestionResult, QuestionResultStatus } from './test.model';
 import { SAMPLE_TEST_TEMPLATE } from './sample-test.template';
 import { NotFoundError, ValidationError, ForbiddenError } from '../../middlewares/errorHandler';
 import { AuthContext } from '../../lib/auth-context';
@@ -38,6 +39,9 @@ import type {
   RunCodeCaseResult,
   SubmitCodeResult,
   CreateTestPayload,
+  TestResultAnalysis,
+  TestSectionPerformance,
+  TestTopicAnalysisRow,
 } from '@placementos/types';
 
 const idOf = (doc: unknown) => String((doc as { _id: { toString(): string } })._id);
@@ -111,7 +115,59 @@ const toAttemptApiShape = (a: ITestAttempt): TestAttemptApiShape => ({
   violations: a.violations.map((v) => ({ type: v.type, at: new Date(v.at).toISOString(), detail: v.detail })),
   score: a.score,
   status: a.status,
+  viewedQuestionIndexes: a.viewedQuestionIndexes,
+  proctoring: a.proctoring ? { ipAddresses: a.proctoring.ipAddresses, os: a.proctoring.os, browser: a.proctoring.browser } : undefined,
+  resumeCount: a.resumeCount,
+  questionResults: a.questionResults,
 });
+
+/** Best-effort User-Agent sniff — just enough to fill "OS Used" / "Browser Used" on the
+ *  result-analysis screen, not a real device-detection library. */
+function parseUserAgent(ua?: string): { os?: string; browser?: string } {
+  if (!ua) return {};
+  const os = /windows/i.test(ua) ? 'Windows' : /mac os/i.test(ua) ? 'macOS' : /android/i.test(ua) ? 'Android' : /iphone|ipad/i.test(ua) ? 'iOS' : /linux/i.test(ua) ? 'Linux' : undefined;
+  const browser = /edg\//i.test(ua) ? 'Edge' : /chrome\//i.test(ua) ? 'Chrome' : /firefox\//i.test(ua) ? 'Firefox' : /safari\//i.test(ua) ? 'Safari' : undefined;
+  return { os, browser };
+}
+
+/** This attempt's question order, falling back to the identity order for attempts created
+ *  before per-candidate randomization existed (or a mismatched/corrupt stored order). */
+function orderFor(attempt: ITestAttempt, questionCount: number): number[] {
+  if (attempt.questionOrder?.length === questionCount) return attempt.questionOrder;
+  return Array.from({ length: questionCount }, (_, i) => i);
+}
+
+/** Client-facing question indexes are always positions in the candidate's shuffled order —
+ *  this maps one back to the paper's own original index before it's persisted or used to
+ *  look up `test.questions`. */
+function toOriginalIndex(order: number[], clientIndex: number): number {
+  return order[clientIndex] ?? clientIndex;
+}
+
+function toClientIndex(order: number[], originalIndex: number): number {
+  const i = order.indexOf(originalIndex);
+  return i === -1 ? originalIndex : i;
+}
+
+/** Rebuilds an attempt's answers/viewedQuestionIndexes with question indexes translated from
+ *  the paper's original order into this candidate's shuffled client-facing order. Reads each
+ *  answer field explicitly rather than spreading it — `answers` are Mongoose subdocuments, and
+ *  `{ ...a }` copies their internal `$__`/`_doc`/`__parentArray` bookkeeping as if they were
+ *  plain data, corrupting the JSON response. */
+function remapAttemptForClient(attempt: TestAttemptApiShape, order: number[]): TestAttemptApiShape {
+  return {
+    ...attempt,
+    answers: attempt.answers.map((a) => ({
+      questionIndex: toClientIndex(order, a.questionIndex),
+      selectedOption: a.selectedOption,
+      answerText: a.answerText,
+      code: a.code,
+      language: a.language,
+      submission: a.submission,
+    })),
+    viewedQuestionIndexes: (attempt.viewedQuestionIndexes ?? []).map((i) => toClientIndex(order, i)),
+  };
+}
 
 const ACCESS_CODE_SALT_ROUNDS = 10;
 const ACCESS_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/O/1/I — avoids look-alike mistypes
@@ -170,44 +226,59 @@ async function runAgainstTestCases(code: string, language: NonNullable<ITestQues
   return { status: 'ok', results, allPassed };
 }
 
-/** Auto-grades MCQ, exact-match short-answer, and coding questions. Open-ended answers with
- *  no correctAnswer set simply don't contribute — a human reviewer can still read them in the
- *  attempt review screen. Coding questions award proportional marks based on the fraction of
- *  test cases (visible + hidden) the candidate's last-saved code passes; if Judge0 isn't
- *  configured, or the question has no test cases, they contribute 0 (manual review only). */
-async function scoreAttempt(test: ITest, attempt: ITestAttempt): Promise<number> {
-  // Each answer scores independently — coding ones that need judging run concurrently.
-  const marks = await Promise.all(
-    attempt.answers.map(async (answer): Promise<number> => {
-      const question = test.questions[answer.questionIndex];
-      if (!question) return 0;
+/** Auto-grades MCQ, exact-match short-answer, and coding questions, and classifies every
+ *  question into a `QuestionResultStatus` for the result-analysis screen along the way.
+ *  Open-ended answers with no correctAnswer set are marked 'partial' (0 marks, needs a human
+ *  reviewer) rather than contributing to score. Coding questions award proportional marks
+ *  based on the fraction of test cases (visible + hidden) the candidate's last-saved code
+ *  passes — 'correct' if all pass, 'wrong' if none do, 'partial' otherwise. A verdict from the
+ *  candidate's own "Submit code" is reused while the code is unchanged; otherwise the code is
+ *  judged here (all coding questions concurrently). If Judge0 isn't configured, or the
+ *  question has no test cases, they're 'partial' with 0 marks (manual review only). An
+ *  unanswered question is 'skipped' if the candidate's client ever reported it as viewed,
+ *  otherwise 'not_viewed'. */
+async function scoreAttemptDetailed(test: ITest, attempt: ITestAttempt): Promise<{ score: number; questionResults: ITestQuestionResult[] }> {
+  const viewed = new Set(attempt.viewedQuestionIndexes ?? []);
+  const answerByIndex = new Map(attempt.answers.map((a) => [a.questionIndex, a]));
+
+  const codingResult = (question: ITestQuestionSnapshot, questionIndex: number, passedCount: number, totalCount: number): ITestQuestionResult => {
+    const marksObtained = Math.round(question.marks * (passedCount / totalCount));
+    const status: QuestionResultStatus = passedCount === totalCount ? 'correct' : passedCount === 0 ? 'wrong' : 'partial';
+    return { questionIndex, status, marksObtained };
+  };
+
+  const questionResults = await Promise.all(
+    test.questions.map(async (question, i): Promise<ITestQuestionResult> => {
+      const answer = answerByIndex.get(i);
+      const hasAnswer = !!answer && !!(answer.selectedOption?.trim() || answer.answerText?.trim() || answer.code?.trim());
+      if (!answer || !hasAnswer) return { questionIndex: i, status: viewed.has(i) ? 'skipped' : 'not_viewed', marksObtained: 0 };
 
       if (question.questionType === 'coding') {
-        if (!answer.code || !answer.language || !question.testCases?.length) return 0;
-        // The candidate already judged exactly this code with "Submit code" — reuse that verdict
-        // instead of re-running every case at final submit.
+        if (!answer.code || !answer.language || !question.testCases?.length) return { questionIndex: i, status: 'partial', marksObtained: 0 };
         const sub = answer.submission;
         if (sub && sub.code === answer.code && sub.language === answer.language && sub.totalCount > 0) {
-          return Math.round(question.marks * (sub.passedCount / sub.totalCount));
+          return codingResult(question, i, sub.passedCount, sub.totalCount);
         }
-        if (!isJudge0Configured()) return 0;
+        if (!isJudge0Configured()) return { questionIndex: i, status: 'partial', marksObtained: 0 };
         try {
           const result = await runAgainstTestCases(answer.code, answer.language, question.testCases);
-          if (result.status !== 'ok' || result.results.length === 0) return 0;
-          const passedCount = result.results.filter((r) => r.passed).length;
-          return Math.round(question.marks * (passedCount / result.results.length));
+          if (result.status === 'compile_error') return { questionIndex: i, status: 'wrong', marksObtained: 0 };
+          if (result.status !== 'ok' || result.results.length === 0) return { questionIndex: i, status: 'partial', marksObtained: 0 };
+          return codingResult(question, i, result.results.filter((r) => r.passed).length, result.results.length);
         } catch {
           // Judge0 unreachable at submit time — treat as unscored rather than failing the whole submit.
-          return 0;
+          return { questionIndex: i, status: 'partial', marksObtained: 0 };
         }
       }
 
-      if (!question.correctAnswer) return 0;
+      if (!question.correctAnswer) return { questionIndex: i, status: 'partial', marksObtained: 0 };
       const given = question.questionType === 'mcq' ? answer.selectedOption : answer.answerText;
-      return given?.trim().toLowerCase() === question.correctAnswer.trim().toLowerCase() ? question.marks : 0;
+      const isCorrect = given?.trim().toLowerCase() === question.correctAnswer.trim().toLowerCase();
+      return { questionIndex: i, status: isCorrect ? 'correct' : 'wrong', marksObtained: isCorrect ? question.marks : 0 };
     })
   );
-  return marks.reduce((sum, m) => sum + m, 0);
+
+  return { score: questionResults.reduce((sum, r) => sum + r.marksObtained, 0), questionResults };
 }
 
 export const testService = {
@@ -427,6 +498,196 @@ export const testService = {
     }));
   },
 
+  /** Examly-style "Result & Analysis" breakdown for one candidate's attempt — topper/average/
+   *  least scores are computed across every submitted attempt for this same test. Faculty/TPO
+   *  review screen only (needs the answer key). */
+  async getResultAnalysis(testId: string, attemptId: string, ctx: AuthContext): Promise<TestResultAnalysis> {
+    const test = await testRepository.findById(testId, ctx.instituteId);
+    if (!test) throw new NotFoundError('Test');
+
+    const attempt = await testAttemptRepository.findById(attemptId, ctx.instituteId);
+    if (!attempt || attempt.testId !== testId) throw new NotFoundError('Test attempt');
+
+    const candidate = await candidateRepository.findById(attempt.candidateId, ctx.instituteId);
+    const allSubmitted = await testAttemptRepository.findSubmittedByTest(testId, ctx.instituteId);
+
+    // Older/in-progress attempts may not have questionResults persisted yet — grade on the fly
+    // rather than requiring a re-submit just to view analysis.
+    const questionResults = attempt.questionResults?.length ? attempt.questionResults : (await scoreAttemptDetailed(test, attempt)).questionResults;
+
+    // A per-question section label wins; otherwise the question's builder section (e.g.
+    // "Section B — Coding"), so sectioned tests break down by section with no extra tagging.
+    const testSections = sectionsOf(test);
+    const sectionOf = (q: ITestQuestionSnapshot) =>
+      q.section?.trim() || (test.sections?.length ? testSections[q.sectionIndex ?? 0]?.title : undefined) || 'General';
+    const sectionNames = [...new Set(test.questions.map(sectionOf))];
+
+    const sectionScoresFor = (results: ITestQuestionResult[] | undefined): Record<string, number> => {
+      const scores: Record<string, number> = {};
+      for (const name of sectionNames) scores[name] = 0;
+      const byIndex = new Map((results ?? []).map((r) => [r.questionIndex, r]));
+      test.questions.forEach((q, i) => {
+        const r = byIndex.get(i);
+        if (r) scores[sectionOf(q)] += r.marksObtained;
+      });
+      return scores;
+    };
+
+    const allSectionScores = allSubmitted.map((a) => sectionScoresFor(a.questionResults));
+    const mySectionScores = sectionScoresFor(questionResults);
+
+    const sections: TestSectionPerformance[] = sectionNames.map((name) => {
+      const indexesInSection = new Set(test.questions.map((q, i) => (sectionOf(q) === name ? i : -1)).filter((i) => i >= 0));
+      const qs = test.questions.filter((q) => sectionOf(q) === name);
+      const myResults = questionResults.filter((r) => indexesInSection.has(r.questionIndex));
+      const scoresAcross = allSectionScores.map((s) => s[name] ?? 0);
+
+      return {
+        section: name,
+        totalMarks: qs.reduce((sum, q) => sum + q.marks, 0),
+        myScore: mySectionScores[name] ?? 0,
+        topperScore: scoresAcross.length ? Math.max(...scoresAcross) : 0,
+        averageScore: scoresAcross.length ? Math.round((scoresAcross.reduce((a, b) => a + b, 0) / scoresAcross.length) * 100) / 100 : 0,
+        leastScore: scoresAcross.length ? Math.min(...scoresAcross) : 0,
+        totalQuestions: qs.length,
+        attempted: myResults.filter((r) => r.status !== 'skipped' && r.status !== 'not_viewed').length,
+        correct: myResults.filter((r) => r.status === 'correct').length,
+        wrong: myResults.filter((r) => r.status === 'wrong').length,
+        partial: myResults.filter((r) => r.status === 'partial').length,
+        skipped: myResults.filter((r) => r.status === 'skipped').length,
+        notViewed: myResults.filter((r) => r.status === 'not_viewed').length,
+      };
+    });
+
+    const totalRow: TestSectionPerformance = sections.reduce(
+      (acc, s) => ({
+        section: 'Total',
+        totalMarks: acc.totalMarks + s.totalMarks,
+        myScore: acc.myScore + s.myScore,
+        topperScore: acc.topperScore + s.topperScore,
+        averageScore: Math.round((acc.averageScore + s.averageScore) * 100) / 100,
+        leastScore: acc.leastScore + s.leastScore,
+        totalQuestions: acc.totalQuestions + s.totalQuestions,
+        attempted: acc.attempted + s.attempted,
+        correct: acc.correct + s.correct,
+        wrong: acc.wrong + s.wrong,
+        partial: acc.partial + s.partial,
+        skipped: acc.skipped + s.skipped,
+        notViewed: acc.notViewed + s.notViewed,
+      }),
+      { section: 'Total', totalMarks: 0, myScore: 0, topperScore: 0, averageScore: 0, leastScore: 0, totalQuestions: 0, attempted: 0, correct: 0, wrong: 0, partial: 0, skipped: 0, notViewed: 0 }
+    );
+
+    // Topic-wise analysis, two levels: "Topic" = section (Numerical/Verbal/Reasoning Ability…),
+    // "Sub Topic" = the question's own `topic` tag (Simple Interest, Time and Work…).
+    const subject = test.track?.trim() || 'Aptitude';
+    const resultByIndex = new Map(questionResults.map((r) => [r.questionIndex, r]));
+
+    type CountAgg = { topic: string; subTopic: string; correct: number; partial: number; wrong: number; skipped: number; notViewed: number; total: number };
+    const countMap = new Map<string, CountAgg>();
+    type MarksAgg = { topic: string; subTopic: string; correctMarks: number; partialMarks: number; totalMarks: number };
+    const marksMap = new Map<string, MarksAgg>();
+
+    test.questions.forEach((q, i) => {
+      const topic = sectionOf(q);
+      const subTopic = q.topic?.trim() || 'General';
+      const key = `${topic}::${subTopic}`;
+      const r = resultByIndex.get(i);
+      const status: QuestionResultStatus = r?.status ?? 'not_viewed';
+
+      const countEntry = countMap.get(key) ?? { topic, subTopic, correct: 0, partial: 0, wrong: 0, skipped: 0, notViewed: 0, total: 0 };
+      countEntry.total += 1;
+      if (status === 'correct') countEntry.correct += 1;
+      else if (status === 'partial') countEntry.partial += 1;
+      else if (status === 'wrong') countEntry.wrong += 1;
+      else if (status === 'skipped') countEntry.skipped += 1;
+      else countEntry.notViewed += 1;
+      countMap.set(key, countEntry);
+
+      const marksEntry = marksMap.get(key) ?? { topic, subTopic, correctMarks: 0, partialMarks: 0, totalMarks: 0 };
+      marksEntry.totalMarks += q.marks;
+      if (status === 'correct') marksEntry.correctMarks += r?.marksObtained ?? 0;
+      if (status === 'partial') marksEntry.partialMarks += r?.marksObtained ?? 0;
+      marksMap.set(key, marksEntry);
+    });
+
+    const countWiseAnalysis: TestTopicAnalysisRow[] = [...countMap.values()].map((e) => ({
+      subject,
+      topic: e.topic,
+      subTopic: e.subTopic,
+      accuracy: e.total ? Math.round((e.correct / e.total) * 100) : 0,
+      correct: e.correct,
+      partial: e.partial,
+      wrong: e.wrong,
+      skipped: e.skipped,
+      notViewed: e.notViewed,
+      total: e.total,
+    }));
+
+    const marksWiseAnalysis: TestTopicAnalysisRow[] = [...marksMap.values()].map((e) => ({
+      subject,
+      topic: e.topic,
+      subTopic: e.subTopic,
+      accuracy: e.totalMarks ? Math.round((e.correctMarks / e.totalMarks) * 100) : 0,
+      correct: e.correctMarks,
+      partial: e.partialMarks,
+      wrong: 0,
+      skipped: 0,
+      notViewed: 0,
+      total: e.totalMarks,
+    }));
+
+    const topPerforming = countWiseAnalysis.filter((r) => r.total > 0 && r.accuracy === 100).map((r) => r.subTopic).slice(0, 5);
+    const leastPerforming = countWiseAnalysis.filter((r) => r.total > 0 && r.accuracy === 0).map((r) => r.subTopic).slice(0, 5);
+
+    const durationSeconds = attempt.submittedAt
+      ? Math.max(0, Math.round((new Date(attempt.submittedAt).getTime() - new Date(attempt.startedAt).getTime()) / 1000))
+      : 0;
+
+    return {
+      candidateName: candidate?.fullName ?? 'Unknown',
+      candidateEmail: candidate?.email,
+      testTitle: test.title,
+      track: test.track,
+      ipAddresses: attempt.proctoring?.ipAddresses ?? [],
+      tabSwitches: attempt.violations.filter((v) => v.type === 'tab_switch').length,
+      os: attempt.proctoring?.os,
+      browser: attempt.proctoring?.browser,
+      durationSeconds,
+      startedAt: new Date(attempt.startedAt).toISOString(),
+      submittedAt: attempt.submittedAt ? new Date(attempt.submittedAt).toISOString() : undefined,
+      resumeCount: attempt.resumeCount ?? 0,
+      totalMarks: test.totalMarks,
+      myScore: totalRow.myScore,
+      sections,
+      totalRow,
+      topPerforming,
+      leastPerforming,
+      countWiseAnalysis,
+      marksWiseAnalysis,
+      questions: test.questions.map((q, i) => {
+        const answer = attempt.answers.find((a) => a.questionIndex === i);
+        const r = resultByIndex.get(i);
+        return {
+          questionIndex: i,
+          section: sectionOf(q),
+          questionText: q.questionText,
+          questionType: q.questionType,
+          options: q.options,
+          correctAnswer: q.correctAnswer,
+          selectedOption: answer?.selectedOption,
+          answerText: answer?.answerText,
+          marks: q.marks,
+          marksObtained: r?.marksObtained ?? 0,
+          status: r?.status ?? 'not_viewed',
+          level: q.level,
+          topic: q.topic,
+          subTopic: q.subTopic,
+        };
+      }),
+    };
+  },
+
   // ── Candidate-facing ─────────────────────────────────────────────────────
 
   async listMine(ctx: AuthContext): Promise<TestForCandidate[]> {
@@ -494,26 +755,43 @@ export const testService = {
       const isValid = await bcrypt.compare(accessCode, assignment.accessCodeHash);
       if (!isValid) throw new ForbiddenError('Incorrect access code');
 
-      attempt = await testAttemptRepository.create(ctx.instituteId, assignment.testId, assignmentId, candidateId);
+      const { os, browser } = parseUserAgent(ctx.userAgent);
+      attempt = await testAttemptRepository.create(ctx.instituteId, assignment.testId, assignmentId, candidateId, test.questions.map((q) => q.sectionIndex ?? 0), {
+        ipAddresses: ctx.ip ? [ctx.ip] : [],
+        os,
+        browser,
+      });
+    } else {
+      attempt = (await testAttemptRepository.recordResume(idOf(attempt), ctx.ip)) ?? attempt;
     }
 
+    // Each candidate sees the paper's questions in their own shuffled order — defeats a
+    // "Q4 is B" cheat-sheet passed between candidates on the same paper. The client only ever
+    // deals in positions within *this* shuffled order, so the attempt's answers/viewed indexes
+    // (stored against the paper's original order) are translated here before being returned.
+    const order = orderFor(attempt, test.questions.length);
+    const attemptForClient = remapAttemptForClient(toAttemptApiShape(attempt), order);
+
     return {
-      attempt: toAttemptApiShape(attempt),
+      attempt: attemptForClient,
       title: test.title,
       description: test.description,
       instructions: test.instructions,
       sections: sectionsOf(test),
-      questions: test.questions.map((q) => ({
-        questionText: q.questionText,
-        questionType: q.questionType,
-        options: q.options,
-        marks: q.marks,
-        sectionIndex: q.sectionIndex ?? 0,
-        allowedLanguages: q.allowedLanguages,
-        starterCode: q.starterCode,
-        // Hidden test cases are never sent to the candidate's client.
-        testCases: q.testCases?.filter((tc) => !tc.hidden),
-      })),
+      questions: order.map((originalIndex) => {
+        const q = test.questions[originalIndex];
+        return {
+          questionText: q.questionText,
+          questionType: q.questionType,
+          options: q.options,
+          marks: q.marks,
+          sectionIndex: q.sectionIndex ?? 0,
+          allowedLanguages: q.allowedLanguages,
+          starterCode: q.starterCode,
+          // Hidden test cases are never sent to the candidate's client.
+          testCases: q.testCases?.filter((tc) => !tc.hidden),
+        };
+      }),
       durationMinutes: test.durationMinutes,
       violationLimit: test.violationLimit,
       serverTime: new Date().toISOString(),
@@ -527,9 +805,13 @@ export const testService = {
     if (!attempt || attempt.candidateId !== candidateId) throw new NotFoundError('Test attempt');
     if (attempt.status !== 'in_progress') throw new ValidationError('This attempt has already been submitted');
 
-    const updated = await testAttemptRepository.upsertAnswer(attemptId, data);
+    const test = await testRepository.findById(attempt.testId, ctx.instituteId);
+    if (!test) throw new NotFoundError('Test');
+    const order = orderFor(attempt, test.questions.length);
+
+    const updated = await testAttemptRepository.upsertAnswer(attemptId, { ...data, questionIndex: toOriginalIndex(order, data.questionIndex) });
     if (!updated) throw new NotFoundError('Test attempt');
-    return toAttemptApiShape(updated);
+    return remapAttemptForClient(toAttemptApiShape(updated), order);
   },
 
   /** Logs one proctoring violation and auto-submits the attempt the moment the
@@ -552,12 +834,30 @@ export const testService = {
 
     let autoSubmitted = false;
     if (violationCount > test.violationLimit) {
-      const score = updated ? await scoreAttempt(test, updated) : undefined;
-      await testAttemptRepository.submit(attemptId, { autoSubmitted: true, score });
+      const graded = updated ? await scoreAttemptDetailed(test, updated) : undefined;
+      await testAttemptRepository.submit(attemptId, { autoSubmitted: true, score: graded?.score, questionResults: graded?.questionResults });
       autoSubmitted = true;
     }
 
     return { violationCount, limit: test.violationLimit, autoSubmitted };
+  },
+
+  /** Best-effort telemetry from the candidate's client — records that a question was
+   *  actually displayed, so an unanswered question can be told apart as 'skipped' (seen,
+   *  left blank) vs 'not_viewed' (never reached) in result analysis. Silently ignored once
+   *  the attempt is no longer in progress. */
+  async markViewed(attemptId: string, rawInput: unknown, ctx: AuthContext): Promise<void> {
+    const { questionIndex } = markViewedSchema.parse(rawInput);
+    const candidateId = await resolveCandidateId(ctx);
+    const attempt = await testAttemptRepository.findById(attemptId, ctx.instituteId);
+    if (!attempt || attempt.candidateId !== candidateId) throw new NotFoundError('Test attempt');
+    if (attempt.status !== 'in_progress') return;
+
+    const test = await testRepository.findById(attempt.testId, ctx.instituteId);
+    if (!test) throw new NotFoundError('Test');
+    const order = orderFor(attempt, test.questions.length);
+
+    await testAttemptRepository.markViewed(attemptId, toOriginalIndex(order, questionIndex));
   },
 
   async submit(attemptId: string, ctx: AuthContext): Promise<TestAttemptApiShape> {
@@ -569,8 +869,8 @@ export const testService = {
     const test = await testRepository.findById(attempt.testId, ctx.instituteId);
     if (!test) throw new NotFoundError('Test');
 
-    const score = await scoreAttempt(test, attempt);
-    const updated = await testAttemptRepository.submit(attemptId, { autoSubmitted: false, score });
+    const { score, questionResults } = await scoreAttemptDetailed(test, attempt);
+    const updated = await testAttemptRepository.submit(attemptId, { autoSubmitted: false, score, questionResults });
     if (!updated) throw new NotFoundError('Test attempt');
     return toAttemptApiShape(updated);
   },
@@ -601,9 +901,9 @@ export const testService = {
    *  masked: pass/fail only. */
   async submitCode(attemptId: string, rawInput: unknown, ctx: AuthContext): Promise<SubmitCodeResult> {
     const data = submitCodeSchema.parse(rawInput);
-    const { question } = await loadCodingQuestion(attemptId, data, ctx);
+    const { question, originalIndex } = await loadCodingQuestion(attemptId, data, ctx);
 
-    await testAttemptRepository.upsertAnswer(attemptId, { questionIndex: data.questionIndex, code: data.code, language: data.language });
+    await testAttemptRepository.upsertAnswer(attemptId, { questionIndex: originalIndex, code: data.code, language: data.language });
 
     const cases = question.testCases ?? [];
     const result = await runAgainstTestCases(data.code, data.language, cases);
@@ -611,7 +911,7 @@ export const testService = {
     // without being re-judged.
     const passedCount = result.status === 'ok' ? result.results.filter((r) => r.passed).length : 0;
     if (result.status !== 'not_configured') {
-      await testAttemptRepository.setSubmission(attemptId, data.questionIndex, {
+      await testAttemptRepository.setSubmission(attemptId, originalIndex, {
         code: data.code,
         language: data.language,
         passedCount,
@@ -625,7 +925,9 @@ export const testService = {
 };
 
 /** Shared guard for Run / Submit code: the attempt is the caller's and still open, and the
- *  question is a coding question that allows the chosen language. */
+ *  question is a coding question that allows the chosen language. `data.questionIndex` is a
+ *  position in the candidate's shuffled order; `originalIndex` is the paper's own index, which
+ *  is what gets persisted. */
 async function loadCodingQuestion(attemptId: string, data: { questionIndex: number; language: CodingLanguage }, ctx: AuthContext) {
   const candidateId = await resolveCandidateId(ctx);
   const attempt = await testAttemptRepository.findById(attemptId, ctx.instituteId);
@@ -635,8 +937,9 @@ async function loadCodingQuestion(attemptId: string, data: { questionIndex: numb
   const test = await testRepository.findById(attempt.testId, ctx.instituteId);
   if (!test) throw new NotFoundError('Test');
 
-  const question = test.questions[data.questionIndex];
+  const originalIndex = toOriginalIndex(orderFor(attempt, test.questions.length), data.questionIndex);
+  const question = test.questions[originalIndex];
   if (!question || question.questionType !== 'coding') throw new ValidationError('Question is not a coding question');
   if (!question.allowedLanguages?.includes(data.language)) throw new ValidationError('That language is not allowed for this question');
-  return { attempt, test, question };
+  return { attempt, test, question, originalIndex };
 }
