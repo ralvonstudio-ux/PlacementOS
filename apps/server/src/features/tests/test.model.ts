@@ -4,14 +4,19 @@ export type TestStatus = 'draft' | 'pending_approval' | 'approved' | 'rejected';
 export type TestQuestionType = 'mcq' | 'short_answer' | 'coding';
 export type TestAssignmentTargetType = 'batch' | 'candidates';
 export type TestAssignmentStatus = 'active' | 'closed';
-export type CodingLanguage = 'python' | 'java' | 'c' | 'cpp';
+export type CodingLanguage = 'python' | 'java' | 'c' | 'cpp' | 'javascript';
 
-const CODING_LANGUAGES = ['python', 'java', 'c', 'cpp'] as const;
+const CODING_LANGUAGES = ['python', 'java', 'c', 'cpp', 'javascript'] as const;
 
 export interface ITestCase {
   input: string;
   expectedOutput: string;
   hidden: boolean;
+}
+
+export interface ITestSection {
+  title: string;
+  description?: string;
 }
 
 export interface ITestQuestionSnapshot {
@@ -20,6 +25,7 @@ export interface ITestQuestionSnapshot {
   options?: string[];
   correctAnswer?: string;
   marks: number;
+  sectionIndex?: number;
   /** Coding questions only, below. */
   allowedLanguages?: CodingLanguage[];
   starterCode?: Partial<Record<CodingLanguage, string>>;
@@ -30,6 +36,9 @@ export interface ITest extends Document {
   instituteId: string;
   title: string;
   track?: string;
+  description?: string;
+  instructions?: string;
+  sections: ITestSection[];
   questions: ITestQuestionSnapshot[];
   totalMarks: number;
   durationMinutes: number;
@@ -64,6 +73,11 @@ const testCaseSchema = new Schema<ITestCase>(
   { _id: false }
 );
 
+const sectionSchema = new Schema<ITestSection>(
+  { title: { type: String, required: true, trim: true }, description: { type: String, trim: true } },
+  { _id: false }
+);
+
 const testQuestionSchema = new Schema<ITestQuestionSnapshot>(
   {
     questionText: { type: String, required: true, trim: true },
@@ -71,6 +85,7 @@ const testQuestionSchema = new Schema<ITestQuestionSnapshot>(
     options: { type: [String] },
     correctAnswer: { type: String, trim: true },
     marks: { type: Number, required: true, min: 0 },
+    sectionIndex: { type: Number, min: 0, default: 0 },
     allowedLanguages: { type: [String], enum: CODING_LANGUAGES },
     starterCode: { type: Schema.Types.Mixed },
     testCases: { type: [testCaseSchema] },
@@ -83,6 +98,9 @@ const testSchema = new Schema<ITest>(
     instituteId: { type: String, required: true, index: true },
     title: { type: String, required: true, trim: true },
     track: { type: String, trim: true },
+    description: { type: String, trim: true },
+    instructions: { type: String, trim: true },
+    sections: { type: [sectionSchema], default: [] },
     questions: { type: [testQuestionSchema], default: [] },
     totalMarks: { type: Number, required: true, min: 0 },
     durationMinutes: { type: Number, required: true, min: 1 },
@@ -186,12 +204,21 @@ export interface ITestViolation {
   detail?: string;
 }
 
+export interface ICodeSubmission {
+  code: string;
+  language: CodingLanguage;
+  passedCount: number;
+  totalCount: number;
+  submittedAt: Date;
+}
+
 export interface ITestAnswer {
   questionIndex: number;
   selectedOption?: string;
   answerText?: string;
   code?: string;
   language?: CodingLanguage;
+  submission?: ICodeSubmission;
 }
 
 export interface ITestAttempt extends Document {
@@ -215,6 +242,17 @@ const violationSchema = new Schema<ITestViolation>(
   { _id: false }
 );
 
+const codeSubmissionSchema = new Schema<ICodeSubmission>(
+  {
+    code: { type: String, required: true },
+    language: { type: String, enum: CODING_LANGUAGES, required: true },
+    passedCount: { type: Number, required: true },
+    totalCount: { type: Number, required: true },
+    submittedAt: { type: Date, required: true },
+  },
+  { _id: false }
+);
+
 const answerSchema = new Schema<ITestAnswer>(
   {
     questionIndex: { type: Number, required: true },
@@ -222,6 +260,7 @@ const answerSchema = new Schema<ITestAnswer>(
     answerText: { type: String },
     code: { type: String },
     language: { type: String, enum: CODING_LANGUAGES },
+    submission: { type: codeSubmissionSchema },
   },
   { _id: false }
 );

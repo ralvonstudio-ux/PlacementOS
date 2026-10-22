@@ -155,4 +155,18 @@ export const testController = {
       sendSuccess(res, result);
     } catch (err) { next(err); }
   },
+
+  async submitCode(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const ctx = buildAuthContext(req.user!, req.ip ?? undefined);
+      const result = await testService.submitCode(req.params.attemptId, req.body, ctx);
+      sendSuccess(res, result);
+    } catch (err) { next(err); }
+  },
+
+  async sampleTemplate(_req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      sendSuccess(res, testService.getSampleTemplate());
+    } catch (err) { next(err); }
+  },
 };

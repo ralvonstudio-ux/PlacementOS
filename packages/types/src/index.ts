@@ -1452,13 +1452,20 @@ export type TestAssignmentStatus = 'active' | 'closed';
 
 /** Languages a coding question can be attempted/judged in — kept intentionally
  *  small (Judge0's latest runtime for each) rather than exposing its full catalog. */
-export type CodingLanguage = 'python' | 'java' | 'c' | 'cpp';
+export type CodingLanguage = 'python' | 'java' | 'c' | 'cpp' | 'javascript';
 
 export interface TestCase {
   input: string;
   expectedOutput: string;
   /** Hidden cases are never sent to the candidate's client and only run at final submit. */
   hidden: boolean;
+}
+
+/** A named block of questions inside a test (e.g. "Aptitude MCQ", "Coding Round") —
+ *  candidates move between sections with tabs, like an Unstop/HackerRank assessment. */
+export interface TestSection {
+  title: string;
+  description?: string;
 }
 
 /** A question as frozen into a Test at creation time — deliberately a snapshot,
@@ -1470,6 +1477,8 @@ export interface TestQuestionSnapshot {
   options?: string[];
   correctAnswer?: string;
   marks: number;
+  /** Index into the test's `sections` — 0 when the test has a single section. */
+  sectionIndex?: number;
   /** Coding questions only, below. */
   allowedLanguages?: CodingLanguage[];
   starterCode?: Partial<Record<CodingLanguage, string>>;
@@ -1484,6 +1493,11 @@ export interface Test {
   instituteId: string;
   title: string;
   track?: string;
+  /** Opportunity-style overview shown on the candidate's start screen. */
+  description?: string;
+  /** Rules/instructions shown before the candidate starts. */
+  instructions?: string;
+  sections?: TestSection[];
   questions: TestQuestionSnapshot[];
   totalMarks: number;
   durationMinutes: number;
@@ -1506,6 +1520,9 @@ export interface Test {
 export interface CreateTestPayload {
   title: string;
   track?: string;
+  description?: string;
+  instructions?: string;
+  sections?: TestSection[];
   questions: TestQuestionSnapshot[];
   durationMinutes: number;
   violationLimit: number;
@@ -1570,6 +1587,9 @@ export interface CreateAssignmentPayload {
 export interface TestForCandidate {
   _id: string;
   title: string;
+  description?: string;
+  instructions?: string;
+  sectionCount: number;
   batch?: string;
   track?: string;
   totalMarks: number;
@@ -1604,6 +1624,17 @@ export interface TestViolation {
   detail?: string;
 }
 
+/** The result of the candidate's last explicit "Submit code" on a coding question — run
+ *  against every test case (hidden included). Reused at final scoring when the code hasn't
+ *  changed since, so the final submit doesn't have to re-judge it. */
+export interface CodeSubmission {
+  code: string;
+  language: CodingLanguage;
+  passedCount: number;
+  totalCount: number;
+  submittedAt: string;
+}
+
 export interface TestAnswer {
   questionIndex: number;
   selectedOption?: string;
@@ -1611,6 +1642,7 @@ export interface TestAnswer {
   /** Coding questions only. */
   code?: string;
   language?: CodingLanguage;
+  submission?: CodeSubmission;
 }
 
 export interface TestAttempt {
@@ -1631,6 +1663,10 @@ export interface TestAttempt {
 /** Returned once a candidate starts a test — the question set (no answer keys) plus the attempt id. */
 export interface StartTestAttemptResult {
   attempt: TestAttempt;
+  title: string;
+  description?: string;
+  instructions?: string;
+  sections: TestSection[];
   questions: TestQuestionForCandidate[];
   durationMinutes: number;
   violationLimit: number;
@@ -1651,7 +1687,11 @@ export interface SubmitAnswerPayload {
 export interface RunCodePayload {
   code: string;
   language: CodingLanguage;
+  /** When set, runs once against this stdin instead of the sample test cases. */
+  customInput?: string;
 }
+
+export type SubmitCodePayload = Omit<RunCodePayload, 'customInput'>;
 
 export type RunCodeStatus = 'ok' | 'compile_error' | 'runtime_error' | 'timeout' | 'not_configured';
 
@@ -1670,6 +1710,15 @@ export interface RunCodeResult {
   compileError?: string;
   results: RunCodeCaseResult[];
   allPassed: boolean;
+  /** Populated only for a custom-input run. */
+  custom?: { stdout: string; stderr: string; status: string; time?: string };
+}
+
+/** "Submit code" — judged against every test case. Hidden cases come back with their
+ *  input/expected/output blanked so the candidate only learns pass/fail for them. */
+export interface SubmitCodeResult extends RunCodeResult {
+  passedCount: number;
+  totalCount: number;
 }
 
 export interface LogViolationPayload {

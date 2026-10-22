@@ -48,14 +48,27 @@ export const testAttemptRepository = {
     return TestAttempt.create({ instituteId, testId, assignmentId, candidateId, startedAt: new Date(), status: 'in_progress' });
   },
 
+  /** Merges the given fields into the question's stored answer (creating it if missing) —
+   *  merging, not replacing, so an autosave carrying only `code` doesn't wipe the chosen
+   *  `language` or the last code submission. */
   async upsertAnswer(attemptId: string, answer: ITestAnswer): Promise<ITestAttempt | null> {
-    await TestAttempt.updateOne({ _id: attemptId, 'answers.questionIndex': answer.questionIndex }, { $set: { 'answers.$': answer } });
-    const updated = await TestAttempt.findById(attemptId);
-    if (updated && !updated.answers.some((a) => a.questionIndex === answer.questionIndex)) {
-      updated.answers.push(answer);
-      await updated.save();
+    const $set = Object.fromEntries(
+      Object.entries(answer)
+        .filter(([key, value]) => key !== 'questionIndex' && value !== undefined)
+        .map(([key, value]) => [`answers.$.${key}`, value])
+    );
+    const res = Object.keys($set).length
+      ? await TestAttempt.updateOne({ _id: attemptId, 'answers.questionIndex': answer.questionIndex }, { $set })
+      : { matchedCount: await TestAttempt.countDocuments({ _id: attemptId, 'answers.questionIndex': answer.questionIndex }) };
+    if (res.matchedCount === 0) {
+      // The $ne guard keeps two racing first-saves from pushing duplicate entries.
+      await TestAttempt.updateOne({ _id: attemptId, 'answers.questionIndex': { $ne: answer.questionIndex } }, { $push: { answers: answer } });
     }
-    return updated;
+    return TestAttempt.findById(attemptId);
+  },
+
+  async setSubmission(attemptId: string, questionIndex: number, submission: NonNullable<ITestAnswer['submission']>): Promise<void> {
+    await TestAttempt.updateOne({ _id: attemptId, 'answers.questionIndex': questionIndex }, { $set: { 'answers.$.submission': submission } });
   },
 
   async pushViolation(attemptId: string, violation: ITestViolation): Promise<ITestAttempt | null> {

@@ -12,6 +12,7 @@ import bcrypt from 'bcrypt';
 
 const DEMO_PASSWORD = 'Demo@1234';
 const SALT_ROUNDS = 12;
+const DEMO_TEST_ACCESS_CODE = 'DEMO42';
 
 async function main() {
   const mongod = await MongoMemoryServer.create({ instance: { dbName: 'placementos_demo' } });
@@ -24,6 +25,8 @@ async function main() {
   process.env.INSTITUTE_NAME = process.env.INSTITUTE_NAME ?? 'Training & Placement Cell';
   process.env.JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET ?? 'dev-only-access-secret-do-not-use-in-prod';
   process.env.JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET ?? 'dev-only-refresh-secret-do-not-use-in-prod';
+  // Public, keyless Judge0 instance — fine for a local demo of Run / Submit code, not for real exams.
+  process.env.JUDGE0_API_URL = process.env.JUDGE0_API_URL ?? 'https://ce.judge0.com';
 
   // eslint-disable-next-line no-console
   console.log(`[demo] in-memory MongoDB started at ${uri}`);
@@ -132,8 +135,35 @@ async function main() {
     { instituteId, batch: '2026-CSE', track: 'DSA', facultyId, dayOfWeek: 3, startTime: '11:15', endTime: '12:15', room: 'Lab 1', placementYear: '2026', slotId: String(slots[3]._id), createdBy: adminId },
   ]);
 
+  // A ready-to-take proctored test: the 10 MCQ + 5 coding sample, approved and sent to the demo
+  // candidate's batch with a known access code.
+  const { Test, TestAssignment } = await import('../features/tests/test.model');
+  const { SAMPLE_TEST_TEMPLATE } = await import('../features/tests/sample-test.template');
+  const facultyUserId = String((await User.findOne({ email: 'faculty@demo.edu' }))!._id);
+  const sampleTest = await Test.create({
+    ...SAMPLE_TEST_TEMPLATE,
+    totalMarks: SAMPLE_TEST_TEMPLATE.questions.reduce((sum, q) => sum + q.marks, 0),
+    status: 'approved',
+    reviewedBy: adminId,
+    reviewedAt: new Date(),
+    instituteId,
+    createdBy: facultyUserId,
+  });
+  await TestAssignment.create({
+    instituteId,
+    testId: String(sampleTest._id),
+    targetType: 'batch',
+    batch: '2026-CSE',
+    accessCodeHash: await bcrypt.hash(DEMO_TEST_ACCESS_CODE, 10),
+    accessCodeIssuedAt: new Date(),
+    status: 'active',
+    createdBy: facultyUserId,
+  });
+
   // eslint-disable-next-line no-console
   console.log('[demo] seeded institute + 4 logins (admin/tpo/faculty/candidate), password for all: ' + DEMO_PASSWORD);
+  // eslint-disable-next-line no-console
+  console.log(`[demo] seeded "${sampleTest.title}" for batch 2026-CSE — access code ${DEMO_TEST_ACCESS_CODE}`);
 
   await import('../server');
 

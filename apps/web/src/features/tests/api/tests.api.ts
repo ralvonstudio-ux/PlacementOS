@@ -19,15 +19,28 @@ import type {
   TestAttemptReview,
   RunCodePayload,
   RunCodeResult,
+  SubmitCodePayload,
+  SubmitCodeResult,
 } from '@placementos/types';
 
 const BASE = '/tests';
+// Run / Submit code / final submit wait on Judge0, which can queue on a busy instance — the
+// server allows up to 90s per batch, so the client must outwait that.
+const JUDGE_TIMEOUT_MS = 150_000;
 
 export const testsApi = {
   // ── Faculty / TPO ──────────────────────────────────────────────────────────
   async create(payload: CreateTestPayload): Promise<Test> {
     try {
       const res = await apiClient.post<ApiResponse<Test>>(BASE, payload);
+      return res.data.data!;
+    } catch (err) { throw new Error(extractErrorMessage(err)); }
+  },
+
+  /** The ready-made 10 MCQ + 5 coding assessment, to prefill the builder with. */
+  async getSampleTemplate(): Promise<CreateTestPayload> {
+    try {
+      const res = await apiClient.get<ApiResponse<CreateTestPayload>>(`${BASE}/templates/sample`);
       return res.data.data!;
     } catch (err) { throw new Error(extractErrorMessage(err)); }
   },
@@ -146,14 +159,21 @@ export const testsApi = {
 
   async submit(attemptId: string): Promise<TestAttempt> {
     try {
-      const res = await apiClient.post<ApiResponse<TestAttempt>>(`${BASE}/attempts/${attemptId}/submit`);
+      const res = await apiClient.post<ApiResponse<TestAttempt>>(`${BASE}/attempts/${attemptId}/submit`, undefined, { timeout: JUDGE_TIMEOUT_MS });
       return res.data.data!;
     } catch (err) { throw new Error(extractErrorMessage(err)); }
   },
 
   async runCode(attemptId: string, questionIndex: number, payload: RunCodePayload): Promise<RunCodeResult> {
     try {
-      const res = await apiClient.post<ApiResponse<RunCodeResult>>(`${BASE}/attempts/${attemptId}/run`, { questionIndex, ...payload });
+      const res = await apiClient.post<ApiResponse<RunCodeResult>>(`${BASE}/attempts/${attemptId}/run`, { questionIndex, ...payload }, { timeout: JUDGE_TIMEOUT_MS });
+      return res.data.data!;
+    } catch (err) { throw new Error(extractErrorMessage(err)); }
+  },
+
+  async submitCode(attemptId: string, questionIndex: number, payload: SubmitCodePayload): Promise<SubmitCodeResult> {
+    try {
+      const res = await apiClient.post<ApiResponse<SubmitCodeResult>>(`${BASE}/attempts/${attemptId}/submit-code`, { questionIndex, ...payload }, { timeout: JUDGE_TIMEOUT_MS });
       return res.data.data!;
     } catch (err) { throw new Error(extractErrorMessage(err)); }
   },

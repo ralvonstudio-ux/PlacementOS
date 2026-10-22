@@ -10,6 +10,7 @@ import type {
   SubmitAnswerPayload,
   LogViolationPayload,
   RunCodePayload,
+  SubmitCodePayload,
 } from '@placementos/types';
 
 export const testKeys = {
@@ -127,3 +128,12 @@ export const useRunCode = () =>
     mutationFn: ({ attemptId, questionIndex, payload }: { attemptId: string; questionIndex: number; payload: RunCodePayload }) =>
       testsApi.runCode(attemptId, questionIndex, payload),
   });
+
+export const useSubmitCode = () =>
+  useMutation({
+    mutationFn: ({ attemptId, questionIndex, payload }: { attemptId: string; questionIndex: number; payload: SubmitCodePayload }) =>
+      testsApi.submitCode(attemptId, questionIndex, payload),
+  });
+
+export const useLoadSampleTemplate = () =>
+  useMutation({ mutationFn: () => testsApi.getSampleTemplate() });

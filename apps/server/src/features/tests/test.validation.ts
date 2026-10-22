@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-const codingLanguageSchema = z.enum(['python', 'java', 'c', 'cpp']);
+const codingLanguageSchema = z.enum(['python', 'java', 'c', 'cpp', 'javascript']);
 
 const testCaseSchema = z.object({
   input: z.string().default(''),
@@ -15,6 +15,7 @@ const testQuestionSchema = z
     options: z.array(z.string()).optional(),
     correctAnswer: z.string().trim().optional(),
     marks: z.number().min(0),
+    sectionIndex: z.number().int().min(0).default(0),
     allowedLanguages: z.array(codingLanguageSchema).optional(),
     starterCode: z.record(codingLanguageSchema, z.string()).optional(),
     testCases: z.array(testCaseSchema).optional(),
@@ -30,11 +31,23 @@ const testQuestionSchema = z
   .refine((v) => v.questionType !== 'coding' || (v.testCases && v.testCases.length > 0), {
     message: 'A coding question needs at least one test case',
     path: ['testCases'],
+  })
+  .refine((v) => v.questionType !== 'mcq' || !v.correctAnswer || !!v.options?.some((o) => o.trim() === v.correctAnswer), {
+    message: "An MCQ's correct answer must be one of its options",
+    path: ['correctAnswer'],
   });
 
-export const createTestSchema = z.object({
+const testSectionSchema = z.object({
+  title: z.string().trim().min(1, 'Every section needs a title'),
+  description: z.string().trim().optional(),
+});
+
+const testBodySchema = z.object({
   title: z.string().min(1).trim(),
   track: z.string().trim().optional(),
+  description: z.string().trim().max(5000).optional(),
+  instructions: z.string().trim().max(5000).optional(),
+  sections: z.array(testSectionSchema).optional(),
   questions: z.array(testQuestionSchema).min(1, 'Add at least one question'),
   durationMinutes: z.number().int().min(1),
   violationLimit: z.number().int().min(1).default(3),
@@ -45,7 +58,15 @@ export const createTestSchema = z.object({
   aiReview: z.string().optional(),
 });
 
-export const updateTestSchema = createTestSchema.partial();
+// Every question must point at a section that exists — a test with no sections is treated
+// as one implicit section, so only index 0 is valid there.
+const sectionIndexesValid = (v: { sections?: { title: string }[]; questions?: { sectionIndex: number }[] }) =>
+  !v.questions || v.questions.every((q) => q.sectionIndex < Math.max(1, v.sections?.length ?? 0));
+const SECTION_INDEX_ERROR = { message: 'A question belongs to a section that does not exist', path: ['questions'] };
+
+export const createTestSchema = testBodySchema.refine(sectionIndexesValid, SECTION_INDEX_ERROR);
+
+export const updateTestSchema = testBodySchema.partial().refine(sectionIndexesValid, SECTION_INDEX_ERROR);
 
 export const createAssignmentSchema = z
   .object({
@@ -99,9 +120,12 @@ export const submitAnswerSchema = z.object({
 
 export const runCodeSchema = z.object({
   questionIndex: z.number().int().min(0),
-  code: z.string().min(1, 'Write some code before running it'),
+  code: z.string().min(1, 'Write some code before running it').max(100_000),
   language: codingLanguageSchema,
+  customInput: z.string().max(100_000).optional(),
 });
+
+export const submitCodeSchema = runCodeSchema.omit({ customInput: true });
 
 export const logViolationSchema = z.object({
   type: z.enum([
@@ -128,3 +152,4 @@ export type ReviewTestInput = z.infer<typeof reviewTestSchema>;
 export type SubmitAnswerInput = z.infer<typeof submitAnswerSchema>;
 export type LogViolationInput = z.infer<typeof logViolationSchema>;
 export type RunCodeInput = z.infer<typeof runCodeSchema>;
+export type SubmitCodeInput = z.infer<typeof submitCodeSchema>;

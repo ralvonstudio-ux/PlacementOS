@@ -12,8 +12,10 @@ import {
   generateTestDraftSchema,
   reviewTestSchema,
   runCodeSchema,
+  submitCodeSchema,
 } from './test.validation';
-import { ITest, ITestAttempt, ITestAssignment, ITestQuestionSnapshot } from './test.model';
+import { ITest, ITestAttempt, ITestAssignment, ITestQuestionSnapshot, ITestSection, CodingLanguage } from './test.model';
+import { SAMPLE_TEST_TEMPLATE } from './sample-test.template';
 import { NotFoundError, ValidationError, ForbiddenError } from '../../middlewares/errorHandler';
 import { AuthContext } from '../../lib/auth-context';
 import { candidateRepository } from '../candidates/candidate.repository';
@@ -21,7 +23,8 @@ import { resolveCandidateId } from '../candidates/candidate.service';
 import { notificationRepository } from '../notifications/notification.repository';
 import { assertFacultyCanAccessQuestionBank } from '../training-schedule/training-schedule.service';
 import { testGeneratorService } from './test-generator.service';
-import { isJudge0Configured, runOnJudge0 } from '../../lib/judge0';
+import { isJudge0Configured, runOnJudge0, runBatchOnJudge0 } from '../../lib/judge0';
+import { Semaphore } from '../../lib/semaphore';
 import type {
   Test as TestApiShape,
   TestAssignment as TestAssignmentApiShape,
@@ -33,15 +36,24 @@ import type {
   TestAttemptReview,
   RunCodeResult,
   RunCodeCaseResult,
+  SubmitCodeResult,
+  CreateTestPayload,
 } from '@placementos/types';
 
 const idOf = (doc: unknown) => String((doc as { _id: { toString(): string } })._id);
+
+/** Tests created before sections existed have none — they read as one implicit section. */
+const sectionsOf = (t: Pick<ITest, 'sections'>): ITestSection[] =>
+  t.sections?.length ? t.sections.map((s) => ({ title: s.title, description: s.description })) : [{ title: 'Questions' }];
 
 const toTestApiShape = (t: ITest): TestApiShape => ({
   _id: idOf(t),
   instituteId: t.instituteId,
   title: t.title,
   track: t.track,
+  description: t.description,
+  instructions: t.instructions,
+  sections: sectionsOf(t),
   questions: t.questions,
   totalMarks: t.totalMarks,
   durationMinutes: t.durationMinutes,
@@ -86,7 +98,16 @@ const toAttemptApiShape = (a: ITestAttempt): TestAttemptApiShape => ({
   startedAt: new Date(a.startedAt).toISOString(),
   submittedAt: a.submittedAt ? new Date(a.submittedAt).toISOString() : undefined,
   autoSubmitted: a.autoSubmitted,
-  answers: a.answers,
+  answers: a.answers.map((ans) => ({
+    questionIndex: ans.questionIndex,
+    selectedOption: ans.selectedOption,
+    answerText: ans.answerText,
+    code: ans.code,
+    language: ans.language,
+    submission: ans.submission
+      ? { ...ans.submission, submittedAt: new Date(ans.submission.submittedAt).toISOString() }
+      : undefined,
+  })),
   violations: a.violations.map((v) => ({ type: v.type, at: new Date(v.at).toISOString(), detail: v.detail })),
   score: a.score,
   status: a.status,
@@ -101,6 +122,18 @@ function generateAccessCode(length = 6): string {
   return code;
 }
 
+// Caps how many Judge0 batches this process has in flight at once — a whole class can hit
+// Run/Submit at the same moment, and a final submit judges every coding question.
+const judge0Semaphore = new Semaphore(6);
+
+/** Trailing whitespace on each line and trailing blank lines never decide a verdict — and
+ *  Windows line endings in a pasted expected output compare equal to Linux ones. */
+const normalizeOutput = (s: string) => s.replace(/\r\n/g, '\n').split('\n').map((l) => l.trimEnd()).join('\n').trimEnd();
+
+/** Hidden cases are judged but never revealed — the candidate learns only pass/fail. */
+const maskHidden = (r: RunCodeCaseResult): RunCodeCaseResult =>
+  r.hidden ? { hidden: true, passed: r.passed, input: '', expectedOutput: '', stdout: '', stderr: '' } : r;
+
 /** Runs `code` against every one of a coding question's test cases via Judge0 and reports
  *  per-case pass/fail. Shared by the candidate-facing "Run" endpoint (visible cases only) and
  *  by scoring at submit time (all cases, including hidden ones). Compares stdout trimmed of
@@ -111,26 +144,27 @@ async function runAgainstTestCases(code: string, language: NonNullable<ITestQues
     return { status: 'not_configured', results: [], allPassed: false };
   }
 
-  const results: RunCodeCaseResult[] = [];
-  for (const testCase of cases) {
-    const run = await runOnJudge0({ code, language, stdin: testCase.input });
+  // All cases go to Judge0 as one batch; results keep the cases' order.
+  const runs = await judge0Semaphore.run(() => runBatchOnJudge0({ code, language, stdins: cases.map((testCase) => testCase.input) }));
 
-    if (run.statusId === 6) {
-      // Compilation error — same for every case, so surface it once and stop.
-      return { status: 'compile_error', compileError: run.compileOutput || run.stderr, results: [], allPassed: false };
-    }
+  const compileFailure = runs.find((run) => run.statusId === 6);
+  if (compileFailure) {
+    // Compilation error — same for every case, so surface it once.
+    return { status: 'compile_error', compileError: compileFailure.compileOutput || compileFailure.stderr, results: [], allPassed: false };
+  }
 
-    const stdout = run.stdout.trimEnd();
-    const expected = testCase.expectedOutput.trimEnd();
-    results.push({
+  const results: RunCodeCaseResult[] = cases.map((testCase, i) => {
+    const run = runs[i];
+    return {
       hidden: testCase.hidden,
-      passed: run.statusId === 3 && stdout === expected, // 3 = "Accepted" (ran to completion)
+      passed: run.statusId === 3 && normalizeOutput(run.stdout) === normalizeOutput(testCase.expectedOutput), // 3 = "Accepted"
       input: testCase.input,
       expectedOutput: testCase.expectedOutput,
       stdout: run.stdout,
-      stderr: run.stderr,
-    });
-  }
+      // Runtime errors / time limits carry no stderr of their own — fall back to the status text.
+      stderr: run.stderr || (run.statusId > 3 ? run.status : ''),
+    };
+  });
 
   const allPassed = results.length > 0 && results.every((r) => r.passed);
   return { status: 'ok', results, allPassed };
@@ -142,36 +176,47 @@ async function runAgainstTestCases(code: string, language: NonNullable<ITestQues
  *  test cases (visible + hidden) the candidate's last-saved code passes; if Judge0 isn't
  *  configured, or the question has no test cases, they contribute 0 (manual review only). */
 async function scoreAttempt(test: ITest, attempt: ITestAttempt): Promise<number> {
-  let score = 0;
-  for (const answer of attempt.answers) {
-    const question = test.questions[answer.questionIndex];
-    if (!question) continue;
+  // Each answer scores independently — coding ones that need judging run concurrently.
+  const marks = await Promise.all(
+    attempt.answers.map(async (answer): Promise<number> => {
+      const question = test.questions[answer.questionIndex];
+      if (!question) return 0;
 
-    if (question.questionType === 'coding') {
-      if (!answer.code || !answer.language || !question.testCases?.length || !isJudge0Configured()) continue;
-      try {
-        const result = await runAgainstTestCases(answer.code, answer.language, question.testCases);
-        if (result.status === 'ok' && result.results.length > 0) {
-          const passedCount = result.results.filter((r) => r.passed).length;
-          score += Math.round(question.marks * (passedCount / result.results.length));
+      if (question.questionType === 'coding') {
+        if (!answer.code || !answer.language || !question.testCases?.length) return 0;
+        // The candidate already judged exactly this code with "Submit code" — reuse that verdict
+        // instead of re-running every case at final submit.
+        const sub = answer.submission;
+        if (sub && sub.code === answer.code && sub.language === answer.language && sub.totalCount > 0) {
+          return Math.round(question.marks * (sub.passedCount / sub.totalCount));
         }
-      } catch {
-        // Judge0 unreachable at submit time — treat as unscored rather than failing the whole submit.
+        if (!isJudge0Configured()) return 0;
+        try {
+          const result = await runAgainstTestCases(answer.code, answer.language, question.testCases);
+          if (result.status !== 'ok' || result.results.length === 0) return 0;
+          const passedCount = result.results.filter((r) => r.passed).length;
+          return Math.round(question.marks * (passedCount / result.results.length));
+        } catch {
+          // Judge0 unreachable at submit time — treat as unscored rather than failing the whole submit.
+          return 0;
+        }
       }
-      continue;
-    }
 
-    if (!question.correctAnswer) continue;
-    const given = question.questionType === 'mcq' ? answer.selectedOption : answer.answerText;
-    if (given?.trim().toLowerCase() === question.correctAnswer.trim().toLowerCase()) {
-      score += question.marks;
-    }
-  }
-  return score;
+      if (!question.correctAnswer) return 0;
+      const given = question.questionType === 'mcq' ? answer.selectedOption : answer.answerText;
+      return given?.trim().toLowerCase() === question.correctAnswer.trim().toLowerCase() ? question.marks : 0;
+    })
+  );
+  return marks.reduce((sum, m) => sum + m, 0);
 }
 
 export const testService = {
   // ── Faculty / TPO authoring ────────────────────────────────────────────────
+
+  /** A ready-made two-section (10 MCQ + 5 coding) assessment the builder can start from. */
+  getSampleTemplate(): CreateTestPayload {
+    return structuredClone(SAMPLE_TEST_TEMPLATE) as CreateTestPayload;
+  },
 
   async create(rawInput: unknown, ctx: AuthContext): Promise<TestApiShape> {
     const data = createTestSchema.parse(rawInput);
@@ -189,7 +234,8 @@ export const testService = {
     const test = await testRepository.create(ctx.instituteId, ctx.userId, {
       title: input.title,
       track: input.track,
-      questions,
+      // AI drafts are a single section; the faculty member can split them up when editing.
+      questions: questions.map((q) => ({ ...q, sectionIndex: 0 })),
       durationMinutes: input.durationMinutes,
       violationLimit: input.violationLimit,
       contentName: input.contentName,
@@ -398,6 +444,9 @@ export const testService = {
       results.push({
         _id: assignmentId,
         title: test.title,
+        description: test.description,
+        instructions: test.instructions,
+        sectionCount: sectionsOf(test).length,
         batch: a.targetType === 'batch' ? a.batch : undefined,
         track: test.track,
         totalMarks: test.totalMarks,
@@ -450,11 +499,16 @@ export const testService = {
 
     return {
       attempt: toAttemptApiShape(attempt),
+      title: test.title,
+      description: test.description,
+      instructions: test.instructions,
+      sections: sectionsOf(test),
       questions: test.questions.map((q) => ({
         questionText: q.questionText,
         questionType: q.questionType,
         options: q.options,
         marks: q.marks,
+        sectionIndex: q.sectionIndex ?? 0,
         allowedLanguages: q.allowedLanguages,
         starterCode: q.starterCode,
         // Hidden test cases are never sent to the candidate's client.
@@ -522,24 +576,67 @@ export const testService = {
   },
 
   /** Candidate-facing "Run" — executes against a coding question's *visible* sample test
-   *  cases only (never the hidden ones used for scoring), and never persists anything. */
+   *  cases only (never the hidden ones used for scoring), or once against the candidate's own
+   *  custom input. Never persists anything. */
   async runCode(attemptId: string, rawInput: unknown, ctx: AuthContext): Promise<RunCodeResult> {
     const data = runCodeSchema.parse(rawInput);
-    const candidateId = await resolveCandidateId(ctx);
-    const attempt = await testAttemptRepository.findById(attemptId, ctx.instituteId);
-    if (!attempt || attempt.candidateId !== candidateId) throw new NotFoundError('Test attempt');
-    if (attempt.status !== 'in_progress') throw new ValidationError('This attempt has already been submitted');
+    const { question } = await loadCodingQuestion(attemptId, data, ctx);
 
-    const test = await testRepository.findById(attempt.testId, ctx.instituteId);
-    if (!test) throw new NotFoundError('Test');
-
-    const question = test.questions[data.questionIndex];
-    if (!question || question.questionType !== 'coding') throw new ValidationError('Question is not a coding question');
-    if (!question.allowedLanguages?.includes(data.language)) throw new ValidationError('That language is not allowed for this question');
+    if (data.customInput !== undefined) {
+      if (!isJudge0Configured()) return { status: 'not_configured', results: [], allPassed: false };
+      const run = await judge0Semaphore.run(() => runOnJudge0({ code: data.code, language: data.language, stdin: data.customInput ?? '' }));
+      if (run.statusId === 6) return { status: 'compile_error', compileError: run.compileOutput || run.stderr, results: [], allPassed: false };
+      return { status: 'ok', results: [], allPassed: false, custom: { stdout: run.stdout, stderr: run.stderr, status: run.status, time: run.time } };
+    }
 
     const visibleCases = question.testCases?.filter((tc) => !tc.hidden) ?? [];
     if (visibleCases.length === 0) return { status: 'ok', results: [], allPassed: true };
 
     return runAgainstTestCases(data.code, data.language, visibleCases);
   },
+
+  /** Candidate-facing "Submit code" — saves the code as the question's answer and judges it
+   *  against every test case, hidden included. The verdict is stored on the answer and reused
+   *  at final scoring as long as the code isn't changed afterwards. Hidden cases come back
+   *  masked: pass/fail only. */
+  async submitCode(attemptId: string, rawInput: unknown, ctx: AuthContext): Promise<SubmitCodeResult> {
+    const data = submitCodeSchema.parse(rawInput);
+    const { question } = await loadCodingQuestion(attemptId, data, ctx);
+
+    await testAttemptRepository.upsertAnswer(attemptId, { questionIndex: data.questionIndex, code: data.code, language: data.language });
+
+    const cases = question.testCases ?? [];
+    const result = await runAgainstTestCases(data.code, data.language, cases);
+    // A compile error passes nothing — recorded too, so a broken final version scores 0
+    // without being re-judged.
+    const passedCount = result.status === 'ok' ? result.results.filter((r) => r.passed).length : 0;
+    if (result.status !== 'not_configured') {
+      await testAttemptRepository.setSubmission(attemptId, data.questionIndex, {
+        code: data.code,
+        language: data.language,
+        passedCount,
+        totalCount: cases.length,
+        submittedAt: new Date(),
+      });
+    }
+
+    return { ...result, results: result.results.map(maskHidden), passedCount, totalCount: cases.length };
+  },
 };
+
+/** Shared guard for Run / Submit code: the attempt is the caller's and still open, and the
+ *  question is a coding question that allows the chosen language. */
+async function loadCodingQuestion(attemptId: string, data: { questionIndex: number; language: CodingLanguage }, ctx: AuthContext) {
+  const candidateId = await resolveCandidateId(ctx);
+  const attempt = await testAttemptRepository.findById(attemptId, ctx.instituteId);
+  if (!attempt || attempt.candidateId !== candidateId) throw new NotFoundError('Test attempt');
+  if (attempt.status !== 'in_progress') throw new ValidationError('This attempt has already been submitted');
+
+  const test = await testRepository.findById(attempt.testId, ctx.instituteId);
+  if (!test) throw new NotFoundError('Test');
+
+  const question = test.questions[data.questionIndex];
+  if (!question || question.questionType !== 'coding') throw new ValidationError('Question is not a coding question');
+  if (!question.allowedLanguages?.includes(data.language)) throw new ValidationError('That language is not allowed for this question');
+  return { attempt, test, question };
+}

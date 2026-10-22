@@ -14,10 +14,12 @@ router.post('/attempts/:attemptId/answers', authorize('candidate'), testControll
 router.post('/attempts/:attemptId/violations', authorize('candidate'), testController.logViolation);
 router.post('/attempts/:attemptId/submit', authorize('candidate'), testController.submit);
 router.post('/attempts/:attemptId/run', authorize('candidate'), testController.runCode);
+router.post('/attempts/:attemptId/submit-code', authorize('candidate'), testController.submitCode);
 
 // Staff — assignment (sendout) management. Static prefix registered before the paper-level
 // `/:id/...` routes below so `/tests/assignments/...` never gets swallowed by `:id`.
 router.get('/assignments', authorize('admin', 'tpo', 'faculty'), testController.listAllAssignments);
+router.get('/templates/sample', authorize('admin', 'tpo', 'faculty'), testController.sampleTemplate);
 router.post('/assignments/:assignmentId/send-access-code', authorize('admin', 'tpo', 'faculty'), testController.sendAssignmentAccessCode);
 router.patch('/assignments/:assignmentId/close', authorize('admin', 'tpo', 'faculty'), testController.closeAssignment);
 
