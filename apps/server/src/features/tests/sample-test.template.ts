@@ -1,7 +1,8 @@
 import type { CreateTestInput } from './test.validation';
 
 /**
- * A ready-made two-section placement assessment — 10 MCQs (aptitude + CS fundamentals) and
+ * A ready-made two-section placement assessment — 10 MCQs drawn per candidate from a pool of
+ * 15 (aptitude + CS fundamentals) and
  * 5 coding problems, each with visible sample cases and hidden scoring cases. Served to the
  * test builder as a starting template (GET /tests/templates/sample) and seeded into the
  * in-memory demo server, so there is one definition of it.
@@ -45,11 +46,13 @@ export const SAMPLE_TEST_TEMPLATE: CreateTestInput = {
     'You can move between sections freely until you submit the test.',
   ].join('\n'),
   sections: [
-    { title: 'Section A — Aptitude & CS Fundamentals', description: '10 MCQs · 2 marks each · no negative marking' },
+    // A pool of 15 — each candidate gets a random 10.
+    { title: 'Section A — Aptitude & CS Fundamentals', description: '10 MCQs · 2 marks each · no negative marking', pickCount: 10 },
     { title: 'Section B — Coding', description: '5 problems · 10 marks each · marks proportional to test cases passed' },
   ],
   durationMinutes: 90,
   violationLimit: 3,
+  allowedFullscreenExits: 1,
   questions: [
     mcq('What is the worst-case time complexity of binary search on a sorted array of n elements?', ['O(1)', 'O(log n)', 'O(n)', 'O(n log n)'], 'O(log n)'),
     mcq('Which data structure follows the Last-In-First-Out (LIFO) principle?', ['Queue', 'Stack', 'Linked List', 'Heap'], 'Stack'),
@@ -61,6 +64,11 @@ export const SAMPLE_TEST_TEMPLATE: CreateTestInput = {
     mcq('Find the next number in the series: 2, 6, 12, 20, 30, ?', ['40', '42', '44', '48'], '42'),
     mcq('Which OSI layer is responsible for routing packets between networks?', ['Data Link', 'Transport', 'Network', 'Session'], 'Network'),
     mcq('A and B together finish a job in 12 days. A alone finishes it in 20 days. How many days does B alone take?', ['24', '25', '30', '32'], '30'),
+    mcq('Which of these sorting algorithms is stable?', ['Quick Sort', 'Heap Sort', 'Merge Sort', 'Selection Sort'], 'Merge Sort'),
+    mcq('A shopkeeper sells an item for ₹540 at a 20% profit. What was the cost price?', ['₹420', '₹432', '₹450', '₹480'], '₹450'),
+    mcq('Which Java keyword prevents a method from being overridden?', ['static', 'final', 'private', 'const'], 'final'),
+    mcq('The average of 5 numbers is 20. After removing one number the average becomes 18. Which number was removed?', ['24', '26', '28', '30'], '28'),
+    mcq('Which data structure does Breadth-First Search use?', ['Stack', 'Queue', 'Priority Queue', 'Hash Map'], 'Queue'),
 
     coding(
       'Reverse a String\n\nRead a single line of text and print it reversed.\n\nInput: one line (may contain spaces), length ≤ 10^5.\nOutput: the same line, reversed.\n\nExample\nInput:  hello world\nOutput: dlrow olleh',

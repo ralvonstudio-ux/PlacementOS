@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ShieldCheck, Plus, Trash2, Send, Lock, CheckCircle2, XCircle, Sparkles, KeyRound, ChevronDown, ChevronUp, Users } from 'lucide-react';
+import { ShieldCheck, Plus, Trash2, Send, Lock, CheckCircle2, XCircle, Sparkles, KeyRound, ChevronDown, ChevronUp, Users, Activity } from 'lucide-react';
 import { PageContainer } from '@/components/workspace/PageContainer';
 import { WorkspaceHeader } from '@/components/workspace/WorkspaceHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -38,6 +38,17 @@ const inputCls = 'w-full h-9 px-3 rounded-lg border border-gray-200 text-sm focu
  *  list to "my tests" for faculty and "everything" for tpo/admin (who need to see
  *  every pending submission to approve it), so this component only needs to vary
  *  which action buttons it shows per role. */
+/** "15 questions" — or, when sections draw from a pool, "15 per candidate (pool of 20)". */
+function questionsLabel(t: Test): string {
+  const pool = t.questions.length;
+  const sections = t.sections?.length ? t.sections : [{ title: '' }];
+  const perCandidate = sections.reduce((sum, s, si) => {
+    const inSection = t.questions.filter((q) => Math.min(q.sectionIndex ?? 0, sections.length - 1) === si).length;
+    return sum + (s.pickCount && s.pickCount < inSection ? s.pickCount : inSection);
+  }, 0);
+  return perCandidate < pool ? `${perCandidate} per candidate (pool of ${pool})` : `${pool} questions`;
+}
+
 export function TpoTestsPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -106,6 +117,7 @@ export function TpoTestsPage() {
                 onReject={() => handleReject(t._id)}
                 onRemove={() => remove(t._id)}
                 onNavigate={() => navigate(`${basePath}/tests/${t._id}/review`)}
+                onMonitor={() => navigate(`${basePath}/tests/${t._id}/monitor`)}
               />
             ))}
           </div>
@@ -129,6 +141,7 @@ function TestRow({
   onReject,
   onRemove,
   onNavigate,
+  onMonitor,
 }: {
   test: Test;
   canReview: boolean;
@@ -143,6 +156,7 @@ function TestRow({
   onReject: () => void;
   onRemove: () => void;
   onNavigate: () => void;
+  onMonitor: () => void;
 }) {
   // Always fetched (not just while expanded) so the "N sent" count on the collapsed row stays
   // accurate right after assigning — react-query already dedupes/caches this per test id.
@@ -157,7 +171,7 @@ function TestRow({
             {t.aiGenerated && <span title="AI-drafted"><Sparkles className="w-3.5 h-3.5 text-violet-500 shrink-0" /></span>}
           </p>
           <p className="text-xs text-gray-500 mt-0.5">
-            {t.track ? `${t.track} · ` : ''}{t.questions.length} questions · {t.totalMarks} marks · {t.durationMinutes} min · violation limit {t.violationLimit}
+            {t.track ? `${t.track} · ` : ''}{questionsLabel(t)} · {t.totalMarks} marks · {t.durationMinutes} min · violation limit {t.violationLimit}
           </p>
           {t.status === 'rejected' && t.reviewNote && <p className="text-xs text-red-600 mt-1">Rejected: {t.reviewNote}</p>}
         </div>
@@ -190,6 +204,11 @@ function TestRow({
           {t.status === 'approved' && (
             <button onClick={onToggleExpand} className="inline-flex items-center gap-1 h-8 px-2.5 rounded-lg border border-gray-200 hover:bg-gray-50 text-xs font-semibold text-gray-700 transition-colors">
               {assignments.length} sent {expanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+            </button>
+          )}
+          {t.status === 'approved' && (
+            <button onClick={onMonitor} className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-violet-200 bg-violet-50 hover:bg-violet-100 text-xs font-semibold text-violet-700 transition-colors">
+              <Activity className="w-3.5 h-3.5" /> Monitor
             </button>
           )}
           <button onClick={onNavigate} className="h-8 px-3 rounded-lg border border-gray-200 hover:bg-gray-50 text-xs font-semibold text-gray-700 transition-colors">

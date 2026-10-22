@@ -49,7 +49,7 @@ app.use(
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Session-Id'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Session-Id', 'X-Attempt-Session', 'X-Client-Ip'],
   })
 );
 

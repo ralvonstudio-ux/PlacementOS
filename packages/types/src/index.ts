@@ -1466,6 +1466,9 @@ export interface TestCase {
 export interface TestSection {
   title: string;
   description?: string;
+  /** Question pool: how many of this section's questions each candidate gets, drawn at random
+   *  per attempt. Unset (or ≥ the section's question count) means every candidate gets all. */
+  pickCount?: number;
 }
 
 /** A question as frozen into a Test at creation time — deliberately a snapshot,
@@ -1510,6 +1513,9 @@ export interface Test {
   durationMinutes: number;
   /** Number of proctoring violations tolerated before an attempt auto-submits. */
   violationLimit: number;
+  /** Fullscreen exits tolerated (the test pauses until fullscreen is restored); the next exit
+   *  ends the attempt. */
+  allowedFullscreenExits: number;
   status: TestStatus;
   /** Set only when the test was AI-drafted from uploaded/pasted content. */
   contentName?: string;
@@ -1533,6 +1539,7 @@ export interface CreateTestPayload {
   questions: TestQuestionSnapshot[];
   durationMinutes: number;
   violationLimit: number;
+  allowedFullscreenExits?: number;
 }
 
 export interface GenerateTestDraftPayload {
@@ -1623,7 +1630,8 @@ export type TestViolationType =
   | 'devtools'
   | 'no_face'
   | 'screen_share_stopped'
-  | 'extension_detected';
+  | 'extension_detected'
+  | 'multiple_screens';
 
 export interface TestViolation {
   type: TestViolationType;
@@ -1693,6 +1701,89 @@ export interface TestAttempt {
   resumeCount?: number;
   /** Set once at submit — see TestQuestionResult. */
   questionResults?: TestQuestionResult[];
+  /** Why the attempt was ended by the system/staff rather than by the candidate. */
+  terminationReason?: string;
+}
+
+/** One line in an attempt's audit trail — everything that happened, with where it came from. */
+export type TestAttemptEventType =
+  | 'started'
+  | 'resumed'
+  | 'session_takeover'
+  | 'session_blocked'
+  | 'ip_changed'
+  | 'violation'
+  | 'code_submitted'
+  | 'submitted'
+  | 'auto_submitted'
+  | 'force_submitted'
+  | 'new_device_allowed';
+
+export interface TestAttemptEvent {
+  type: TestAttemptEventType;
+  at: string;
+  ip?: string;
+  /** Short device fingerprint: OS · browser. */
+  device?: string;
+  detail?: string;
+}
+
+/** Staff "live monitor" row for one candidate on one test. */
+export interface TestMonitorRow {
+  attemptId?: string;
+  candidateId: string;
+  candidateName: string;
+  rollNumber?: string;
+  email?: string;
+  batch?: string;
+  assignmentLabel?: string;
+  status: 'not_started' | 'in_progress' | 'submitted' | 'auto_submitted';
+  /** In progress and heard from within the last ~45s. */
+  online: boolean;
+  lastSeenAt?: string;
+  startedAt?: string;
+  submittedAt?: string;
+  score?: number;
+  totalMarks: number;
+  answeredCount: number;
+  questionCount: number;
+  currentIp?: string;
+  ipAddresses: string[];
+  ipChanges: number;
+  sessionCount: number;
+  resumeCount: number;
+  os?: string;
+  browser?: string;
+  violationCount: number;
+  violationsByType: Partial<Record<TestViolationType, number>>;
+  fullscreenExits: number;
+  tabSwitches: number;
+  terminationReason?: string;
+  /** Session lock is waiting on staff because the candidate tried to resume from a new network. */
+  newDeviceBlocked: boolean;
+  /** Violations and events merged, oldest first. */
+  timeline: TestAttemptEvent[];
+}
+
+export interface TestMonitor {
+  testId: string;
+  title: string;
+  track?: string;
+  totalMarks: number;
+  durationMinutes: number;
+  violationLimit: number;
+  allowedFullscreenExits: number;
+  questionCount: number;
+  poolSize: number;
+  generatedAt: string;
+  rows: TestMonitorRow[];
+}
+
+/** Candidate client heartbeat reply — tells a stale/overridden window to stop. */
+export interface TestHeartbeatResult {
+  status: TestAttemptStatus;
+  autoSubmitted: boolean;
+  terminationReason?: string;
 }
 
 /** Returned once a candidate starts a test — the question set (no answer keys) plus the attempt id. */
@@ -1705,6 +1796,9 @@ export interface StartTestAttemptResult {
   questions: TestQuestionForCandidate[];
   durationMinutes: number;
   violationLimit: number;
+  allowedFullscreenExits: number;
+  /** Fullscreen exits already used on this attempt (survives a resume). */
+  fullscreenExitsUsed: number;
   serverTime: string;
 }
 
@@ -1765,6 +1859,10 @@ export interface LogViolationResult {
   violationCount: number;
   limit: number;
   autoSubmitted: boolean;
+  fullscreenExitsUsed: number;
+  allowedFullscreenExits: number;
+  /** Human-readable reason when this violation ended the attempt. */
+  terminationReason?: string;
 }
 
 /** TPO/faculty-facing attempt review — includes the answer key and per-question correctness. */
@@ -1838,10 +1936,13 @@ export interface TestResultAnalysisQuestion {
 export interface TestResultAnalysis {
   candidateName: string;
   candidateEmail?: string;
+  batch?: string;
   testTitle: string;
   track?: string;
   ipAddresses: string[];
   tabSwitches: number;
+  violationCount: number;
+  autoSubmitted: boolean;
   os?: string;
   browser?: string;
   durationSeconds: number;

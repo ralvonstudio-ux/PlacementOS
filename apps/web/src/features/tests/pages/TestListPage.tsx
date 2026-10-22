@@ -1,6 +1,6 @@
 import { startTransition } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ShieldCheck, PlayCircle, CheckCircle2, KeyRound } from 'lucide-react';
+import { ShieldCheck, PlayCircle, CheckCircle2, KeyRound, BarChart3 } from 'lucide-react';
 import { PageContainer } from '@/components/workspace/PageContainer';
 import { WorkspaceHeader } from '@/components/workspace/WorkspaceHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -51,22 +51,29 @@ export function TestListPage() {
                   <p className="text-xs text-amber-600 mt-3">Violation limit: {t.violationLimit} — exceeding it auto-submits your attempt.</p>
                 )}
 
-                <button
-                  onClick={() => startTransition(() => navigate(`/candidate/tests/${t._id}/attempt`))}
-                  disabled={t.attemptStatus === 'submitted' || notYetOpen || waitingForCode}
-                  className="mt-4 inline-flex items-center justify-center gap-2 h-10 rounded-xl bg-violet-600 hover:bg-violet-700 text-sm font-semibold text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  <PlayCircle className="w-4 h-4" />
-                  {t.attemptStatus === 'in_progress'
-                    ? 'Resume Test'
-                    : t.attemptStatus === 'submitted'
-                      ? 'Already Submitted'
+                {t.attemptStatus === 'submitted' ? (
+                  <button
+                    onClick={() => startTransition(() => navigate(`/candidate/tests/${t._id}/result`))}
+                    className="mt-4 inline-flex items-center justify-center gap-2 h-10 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-sm font-semibold text-white transition-colors"
+                  >
+                    <BarChart3 className="w-4 h-4" /> View Result &amp; Analysis
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => startTransition(() => navigate(`/candidate/tests/${t._id}/attempt`))}
+                    disabled={notYetOpen || waitingForCode}
+                    className="mt-4 inline-flex items-center justify-center gap-2 h-10 rounded-xl bg-violet-600 hover:bg-violet-700 text-sm font-semibold text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <PlayCircle className="w-4 h-4" />
+                    {t.attemptStatus === 'in_progress'
+                      ? 'Resume Test'
                       : notYetOpen
-                        ? 'Not Yet Open'
-                        : waitingForCode
-                          ? 'Awaiting Access Code'
-                          : 'Start Test'}
-                </button>
+                          ? 'Not Yet Open'
+                          : waitingForCode
+                            ? 'Awaiting Access Code'
+                            : 'Start Test'}
+                  </button>
+                )}
               </div>
             );
           })}

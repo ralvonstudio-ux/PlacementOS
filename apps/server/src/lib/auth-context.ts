@@ -5,6 +5,8 @@ export interface AuthContext {
   role: string;
   ip?: string;
   userAgent?: string;
+  /** Proctored tests only: the candidate's per-tab session id (X-Attempt-Session header). */
+  attemptSessionId?: string;
 }
 
 export const buildAuthContext = (

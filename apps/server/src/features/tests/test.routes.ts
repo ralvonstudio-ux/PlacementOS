@@ -9,6 +9,7 @@ router.use(authenticate);
 
 // Candidate-facing — static routes first.
 router.get('/mine', authorize('candidate'), testController.listMine);
+router.get('/assignments/:assignmentId/my-result', authorize('candidate'), testController.getMyResult);
 router.post('/assignments/:assignmentId/start', authorize('candidate'), testController.start);
 router.post('/attempts/:attemptId/answers', authorize('candidate'), testController.submitAnswer);
 router.post('/attempts/:attemptId/violations', authorize('candidate'), testController.logViolation);
@@ -16,6 +17,11 @@ router.post('/attempts/:attemptId/submit', authorize('candidate'), testControlle
 router.post('/attempts/:attemptId/run', authorize('candidate'), testController.runCode);
 router.post('/attempts/:attemptId/submit-code', authorize('candidate'), testController.submitCode);
 router.post('/attempts/:attemptId/viewed', authorize('candidate'), testController.markViewed);
+router.post('/attempts/:attemptId/heartbeat', authorize('candidate'), testController.heartbeat);
+
+// Staff — live monitoring and control of individual attempts.
+router.post('/attempts/:attemptId/allow-new-device', authorize('admin', 'tpo', 'faculty'), testController.allowNewDevice);
+router.post('/attempts/:attemptId/force-submit', authorize('admin', 'tpo', 'faculty'), testController.forceSubmit);
 
 // Staff — assignment (sendout) management. Static prefix registered before the paper-level
 // `/:id/...` routes below so `/tests/assignments/...` never gets swallowed by `:id`.
@@ -35,6 +41,7 @@ router.post('/:id/assignments', authorize('admin', 'tpo', 'faculty'), testContro
 router.get('/:id/assignments', authorize('admin', 'tpo', 'faculty'), testController.listAssignments);
 router.delete('/:id', authorize('admin', 'tpo', 'faculty'), testController.remove);
 router.get('/:id/review', authorize('admin', 'tpo', 'faculty'), testController.getReview);
+router.get('/:id/monitor', authorize('admin', 'tpo', 'faculty'), testController.getMonitor);
 router.get('/:id/attempts/:attemptId/analysis', authorize('admin', 'tpo', 'faculty'), testController.getResultAnalysis);
 
 export default router;

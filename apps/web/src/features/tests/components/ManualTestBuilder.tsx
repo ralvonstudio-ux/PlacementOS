@@ -23,20 +23,30 @@ export const ALL_LANGUAGES: { value: CodingLanguage; label: string }[] = [
 const TYPE_LABEL: Record<TestQuestionType, string> = { mcq: 'MCQ', coding: 'Coding', short_answer: 'Short answer' };
 
 const PROCTORING_RULES = [
-  'Fullscreen enforced — leaving it pauses the test and logs a violation',
-  'Tab / window switching detected and logged',
-  'Copy, cut, paste, right-click and text selection blocked',
-  'Browser extensions detected (injected scripts, known extensions, ad-blockers)',
-  'DevTools shortcuts blocked and DevTools detection',
-  'Camera and screen share required for the whole test',
-  'Auto-submit once the violation limit is exceeded',
+  'Fullscreen enforced — leaving it hides the test until restored; exits beyond the allowance end it',
+  'Pre-start system check: no extensions, second screens or automation',
+  'Any browser extension detected mid-test ends the attempt',
+  'Entire-screen share + camera required for the whole test',
+  'One window/device per attempt; resuming from a new network needs staff approval',
+  'Every IP, device, violation and action is logged for the live monitor',
+  'Tab/window switching, DevTools, side panels, copy/paste and right-click blocked or logged',
 ];
 
 type BuilderQuestion = Omit<TestQuestionSnapshot, 'sectionIndex'>;
 interface BuilderSection {
   title: string;
   description: string;
+  /** Questions each candidate draws from this section; '' = all of them. */
+  pickCount: number | '';
   questions: BuilderQuestion[];
+}
+
+/** What one candidate's paper gets from a section: question count and marks. */
+function sectionPaper(section: BuilderSection) {
+  const pool = section.questions.length;
+  const n = section.pickCount && section.pickCount < pool ? section.pickCount : pool;
+  const marks = n === pool ? section.questions.reduce((sum, q) => sum + (q.marks || 0), 0) : n * (section.questions[0]?.marks || 0);
+  return { n, marks, pooled: n < pool };
 }
 
 function newQuestion(type: TestQuestionType): BuilderQuestion {
@@ -57,7 +67,7 @@ function newQuestion(type: TestQuestionType): BuilderQuestion {
   return { questionText: '', questionType: 'short_answer', correctAnswer: '', marks: 2 };
 }
 
-const emptySection = (n: number): BuilderSection => ({ title: `Section ${String.fromCharCode(64 + n)}`, description: '', questions: [] });
+const emptySection = (n: number): BuilderSection => ({ title: `Section ${String.fromCharCode(64 + n)}`, description: '', pickCount: '', questions: [] });
 
 /** Everything that would make the server reject the test (or make it un-gradable), listed
  *  up front with where it is — instead of one opaque error after hitting Save. */
@@ -69,6 +79,10 @@ function validate(title: string, sections: BuilderSection[]): string[] {
     const where = (qi: number) => `${s.title || `Section ${si + 1}`} · Q${qi + 1}`;
     if (!s.title.trim()) errors.push(`Section ${si + 1} needs a title.`);
     if (s.questions.length === 0) errors.push(`${s.title || `Section ${si + 1}`} has no questions — add some or delete it.`);
+    if (s.pickCount && s.pickCount > s.questions.length) errors.push(`${s.title || `Section ${si + 1}`}: questions per candidate (${s.pickCount}) is more than the ${s.questions.length} in the pool.`);
+    if (s.pickCount && s.pickCount < s.questions.length && s.questions.some((q) => q.marks !== s.questions[0].marks)) {
+      errors.push(`${s.title || `Section ${si + 1}`}: candidates get different questions from this pool, so they must all carry the same marks.`);
+    }
     s.questions.forEach((q, qi) => {
       if (!q.questionText.trim()) errors.push(`${where(qi)}: question text is empty.`);
       if (q.questionType === 'mcq') {
@@ -99,6 +113,7 @@ export function ManualTestBuilder({ basePath }: { basePath: string }) {
   const [instructions, setInstructions] = useState('');
   const [durationMinutes, setDurationMinutes] = useState(60);
   const [violationLimit, setViolationLimit] = useState(3);
+  const [allowedFullscreenExits, setAllowedFullscreenExits] = useState(1);
   const [sections, setSections] = useState<BuilderSection[]>([{ ...emptySection(1), title: 'Section A — MCQ' }]);
   // Keys are `${sectionIndex}:${questionIndex}` — which question cards are expanded.
   const [open, setOpen] = useState<Set<string>>(new Set());
@@ -106,7 +121,9 @@ export function ManualTestBuilder({ basePath }: { basePath: string }) {
   const [serverError, setServerError] = useState('');
 
   const allQuestions = sections.flatMap((s) => s.questions);
-  const totalMarks = allQuestions.reduce((sum, q) => sum + (q.marks || 0), 0);
+  const papers = sections.map(sectionPaper);
+  const paperQuestions = papers.reduce((sum, p) => sum + p.n, 0);
+  const totalMarks = papers.reduce((sum, p) => sum + p.marks, 0);
 
   function patchSection(si: number, patch: Partial<BuilderSection>) {
     setSections((prev) => prev.map((s, i) => (i === si ? { ...s, ...patch } : s)));
@@ -157,11 +174,13 @@ export function ManualTestBuilder({ basePath }: { basePath: string }) {
     setInstructions(t.instructions ?? '');
     setDurationMinutes(t.durationMinutes);
     setViolationLimit(t.violationLimit);
+    setAllowedFullscreenExits(t.allowedFullscreenExits ?? 1);
     const templateSections = t.sections?.length ? t.sections : [{ title: 'Questions' }];
     setSections(
       templateSections.map((s, si) => ({
         title: s.title,
         description: s.description ?? '',
+        pickCount: s.pickCount ?? '',
         questions: t.questions.filter((q) => (q.sectionIndex ?? 0) === si).map(({ sectionIndex: _ignored, ...q }) => q),
       }))
     );
@@ -191,7 +210,11 @@ export function ManualTestBuilder({ basePath }: { basePath: string }) {
         track: track.trim() || undefined,
         description: description.trim() || undefined,
         instructions: instructions.trim() || undefined,
-        sections: sections.map((s) => ({ title: s.title.trim(), description: s.description.trim() || undefined })),
+        sections: sections.map((s) => ({
+          title: s.title.trim(),
+          description: s.description.trim() || undefined,
+          pickCount: s.pickCount && s.pickCount < s.questions.length ? s.pickCount : undefined,
+        })),
         questions: sections.flatMap((s, si) =>
           s.questions.map((q) => ({
             ...q,
@@ -202,6 +225,7 @@ export function ManualTestBuilder({ basePath }: { basePath: string }) {
         ),
         durationMinutes,
         violationLimit,
+        allowedFullscreenExits,
       });
       navigate(`${basePath}/tests`);
     } catch (err) {
@@ -236,7 +260,7 @@ export function ManualTestBuilder({ basePath }: { basePath: string }) {
             <label className="block text-xs text-gray-500 mb-1">Instructions — one per line</label>
             <textarea value={instructions} onChange={(e) => setInstructions(e.target.value)} rows={4} placeholder={'Read input from stdin and print only the answer.\nNo negative marking.'} className={textareaCls} />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className="block text-xs text-gray-500 mb-1">Duration (minutes)</label>
               <input type="number" min={1} value={durationMinutes} onChange={(e) => setDurationMinutes(Math.max(1, Number(e.target.value)))} className={inputCls} />
@@ -244,6 +268,10 @@ export function ManualTestBuilder({ basePath }: { basePath: string }) {
             <div>
               <label className="block text-xs text-gray-500 mb-1">Violations allowed before auto-submit</label>
               <input type="number" min={1} value={violationLimit} onChange={(e) => setViolationLimit(Math.max(1, Number(e.target.value)))} className={inputCls} />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Fullscreen exits allowed (next one ends test)</label>
+              <input type="number" min={0} max={10} value={allowedFullscreenExits} onChange={(e) => setAllowedFullscreenExits(Math.min(10, Math.max(0, Number(e.target.value))))} className={inputCls} />
             </div>
           </div>
         </div>
@@ -261,7 +289,7 @@ export function ManualTestBuilder({ basePath }: { basePath: string }) {
                   className="flex-1 min-w-0 h-9 px-2 rounded-lg border border-transparent hover:border-gray-200 focus:border-violet-500 text-sm font-bold text-gray-900 focus:outline-none"
                 />
                 <span className="text-xs text-gray-400 shrink-0">
-                  {section.questions.length} Q · {section.questions.reduce((sum, q) => sum + (q.marks || 0), 0)} marks
+                  {papers[si].pooled ? `${papers[si].n} of ${section.questions.length} Q` : `${section.questions.length} Q`} · {papers[si].marks} marks
                 </span>
                 {sections.length > 1 && (
                   <button type="button" onClick={() => removeSection(si)} title="Delete section" className="p-1.5 text-gray-400 hover:text-red-600">
@@ -275,6 +303,23 @@ export function ManualTestBuilder({ basePath }: { basePath: string }) {
                 placeholder="Section note (optional), e.g. 2 marks each · no negative marking"
                 className="w-full h-8 px-2 rounded-lg border border-transparent hover:border-gray-200 focus:border-violet-500 text-xs text-gray-500 focus:outline-none"
               />
+              <div className="flex items-center gap-2 px-2 flex-wrap">
+                <label className="text-xs text-gray-600">Questions per candidate</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={section.questions.length || undefined}
+                  value={section.pickCount}
+                  onChange={(e) => patchSection(si, { pickCount: e.target.value === '' ? '' : Math.max(1, Number(e.target.value)) })}
+                  placeholder={`All (${section.questions.length})`}
+                  className="w-24 h-8 px-2 rounded-lg border border-gray-200 text-xs focus:outline-none focus:ring-1 focus:ring-violet-400"
+                />
+                <span className="text-[11px] text-gray-400">
+                  {papers[si].pooled
+                    ? `Pool of ${section.questions.length} — each candidate gets a random ${papers[si].n}`
+                    : 'Leave blank to give everyone every question; set lower to draw a random subset per candidate'}
+                </span>
+              </div>
             </div>
 
             <div className="p-5 space-y-3">
@@ -358,12 +403,12 @@ export function ManualTestBuilder({ basePath }: { basePath: string }) {
             {sections.map((s, si) => (
               <div key={si} className="flex items-center justify-between text-xs">
                 <span className="text-gray-600 truncate pr-2">{s.title || `Section ${si + 1}`}</span>
-                <span className="text-gray-400 shrink-0">{s.questions.length} Q</span>
+                <span className="text-gray-400 shrink-0">{papers[si].pooled ? `${papers[si].n} of ${s.questions.length}` : s.questions.length} Q</span>
               </div>
             ))}
           </div>
           <div className="grid grid-cols-3 gap-2 mb-4 text-center">
-            <Stat label="Questions" value={allQuestions.length} />
+            <Stat label="Q / candidate" value={paperQuestions} />
             <Stat label="Marks" value={totalMarks} />
             <Stat label="Minutes" value={durationMinutes} />
           </div>
@@ -385,6 +430,9 @@ export function ManualTestBuilder({ basePath }: { basePath: string }) {
             {createTest.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
             Save as Draft
           </button>
+          {paperQuestions < allQuestions.length && (
+            <p className="text-[11px] text-violet-600 mt-2 text-center">{allQuestions.length} questions in the pool · each candidate gets {paperQuestions}</p>
+          )}
           <p className="text-[11px] text-gray-400 mt-2 text-center">Then submit it for TPO approval and send it to a batch.</p>
         </div>
 

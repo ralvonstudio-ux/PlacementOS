@@ -1,9 +1,10 @@
-import { Test, ITest, TestAttempt, ITestAttempt, ITestViolation, ITestAnswer, ITestProctoringInfo, ITestQuestionResult } from './test.model';
+import { Test, ITest, TestAttempt, ITestAttempt, ITestViolation, ITestAnswer, ITestProctoringInfo, ITestQuestionResult, ITestAttemptEvent } from './test.model';
 import { CreateTestInput } from './test.validation';
+import { paperTotalMarks } from './test-paper';
 
 export const testRepository = {
   async create(instituteId: string, createdBy: string, data: CreateTestInput): Promise<ITest> {
-    const totalMarks = data.questions.reduce((sum, q) => sum + q.marks, 0);
+    const totalMarks = paperTotalMarks(data.questions, data.sections);
     return Test.create({ ...data, totalMarks, instituteId, createdBy });
   },
 
@@ -17,7 +18,10 @@ export const testRepository = {
 
   async update(id: string, instituteId: string, data: Partial<CreateTestInput> & { status?: ITest['status'] }): Promise<ITest | null> {
     const $set: Record<string, unknown> = { ...data };
-    if (data.questions) $set.totalMarks = data.questions.reduce((sum, q) => sum + q.marks, 0);
+    if (data.questions || data.sections) {
+      const existing = await Test.findOne({ _id: id, instituteId, isDeleted: false }).lean<ITest>();
+      if (existing) $set.totalMarks = paperTotalMarks(data.questions ?? existing.questions, data.sections ?? existing.sections);
+    }
     return Test.findOneAndUpdate({ _id: id, instituteId, isDeleted: false }, { $set }, { new: true });
   },
 
@@ -44,33 +48,62 @@ export const testAttemptRepository = {
     return TestAttempt.findOne({ _id: id, instituteId });
   },
 
-  /** `questionSections` (each question's sectionIndex, in paper order) seeds a fresh
-   *  Fisher-Yates shuffle *within each section*, sections kept in their own order — this
-   *  candidate's question order for the attempt's whole lifetime (see
-   *  ITestAttempt.questionOrder). Shuffling across sections would interleave e.g. MCQs with
-   *  coding problems and break section-by-section navigation. */
-  async create(instituteId: string, testId: string, assignmentId: string, candidateId: string, questionSections: number[], proctoring?: ITestProctoringInfo): Promise<ITestAttempt> {
-    const sectionIds = [...new Set(questionSections)].sort((a, b) => a - b);
-    const questionOrder = sectionIds.flatMap((section) => {
-      const group = questionSections.map((s, i) => (s === section ? i : -1)).filter((i) => i >= 0);
-      for (let i = group.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [group[i], group[j]] = [group[j], group[i]];
-      }
-      return group;
+  /** `questionOrder` is this candidate's drawn paper (see drawQuestionOrder) — fixed for the
+   *  attempt's whole lifetime. The opening browser session becomes the attempt's active one. */
+  async create(
+    instituteId: string,
+    testId: string,
+    assignmentId: string,
+    candidateId: string,
+    questionOrder: number[],
+    proctoring: ITestProctoringInfo,
+    session: { id: string; ip?: string; device?: string },
+    event: ITestAttemptEvent
+  ): Promise<ITestAttempt> {
+    return TestAttempt.create({
+      instituteId,
+      testId,
+      assignmentId,
+      candidateId,
+      startedAt: new Date(),
+      status: 'in_progress',
+      questionOrder,
+      proctoring,
+      activeSession: { ...session, lastSeenAt: new Date() },
+      sessionCount: 1,
+      events: [event],
     });
-    return TestAttempt.create({ instituteId, testId, assignmentId, candidateId, startedAt: new Date(), status: 'in_progress', questionOrder, proctoring });
   },
 
-  /** Called each time a candidate re-enters an already-started attempt — folds in any new
-   *  IP address seen and bumps the resume count (mirrors a proctoring platform's "Resume
-   *  Count" field). */
-  async recordResume(attemptId: string, ip?: string): Promise<ITestAttempt | null> {
+  /** Hands the attempt to a (re)opening browser session: bumps the resume count, counts a new
+   *  session, folds in its IP, clears any pending new-device block and logs the event. */
+  async openSession(attemptId: string, session: { id: string; ip?: string; device?: string }, opts: { newSession: boolean }, event: ITestAttemptEvent): Promise<ITestAttempt | null> {
     return TestAttempt.findByIdAndUpdate(
       attemptId,
-      { $inc: { resumeCount: 1 }, ...(ip ? { $addToSet: { 'proctoring.ipAddresses': ip } } : {}) },
+      {
+        $set: { activeSession: { ...session, lastSeenAt: new Date() }, newDeviceBlocked: false, allowNewDevice: false },
+        $inc: { resumeCount: 1, ...(opts.newSession ? { sessionCount: 1 } : {}) },
+        $push: { events: event },
+        ...(session.ip ? { $addToSet: { 'proctoring.ipAddresses': session.ip } } : {}),
+      },
       { new: true }
     );
+  },
+
+  /** Marks the active session as alive; a changed IP on the same session is recorded and logged. */
+  async touchSession(attemptId: string, ip: string | undefined, ipChangedEvent?: ITestAttemptEvent): Promise<void> {
+    await TestAttempt.updateOne(
+      { _id: attemptId },
+      {
+        $set: { 'activeSession.lastSeenAt': new Date(), ...(ip ? { 'activeSession.ip': ip } : {}) },
+        ...(ip ? { $addToSet: { 'proctoring.ipAddresses': ip } } : {}),
+        ...(ipChangedEvent ? { $push: { events: ipChangedEvent } } : {}),
+      }
+    );
+  },
+
+  async pushEvent(attemptId: string, event: ITestAttemptEvent, $set: Record<string, unknown> = {}): Promise<void> {
+    await TestAttempt.updateOne({ _id: attemptId }, { $push: { events: event }, ...(Object.keys($set).length ? { $set } : {}) });
   },
 
   async markViewed(attemptId: string, questionIndex: number): Promise<void> {
@@ -100,14 +133,33 @@ export const testAttemptRepository = {
     await TestAttempt.updateOne({ _id: attemptId, 'answers.questionIndex': questionIndex }, { $set: { 'answers.$.submission': submission } });
   },
 
-  async pushViolation(attemptId: string, violation: ITestViolation): Promise<ITestAttempt | null> {
-    return TestAttempt.findByIdAndUpdate(attemptId, { $push: { violations: violation } }, { new: true });
-  },
-
-  async submit(attemptId: string, data: { autoSubmitted: boolean; score?: number; questionResults?: ITestQuestionResult[] }): Promise<ITestAttempt | null> {
+  async pushViolation(attemptId: string, violation: ITestViolation, event: ITestAttemptEvent): Promise<ITestAttempt | null> {
     return TestAttempt.findByIdAndUpdate(
       attemptId,
-      { $set: { status: 'submitted', submittedAt: new Date(), autoSubmitted: data.autoSubmitted, score: data.score, questionResults: data.questionResults } },
+      { $push: { violations: violation, events: event }, $set: { 'activeSession.lastSeenAt': new Date() } },
+      { new: true }
+    );
+  },
+
+  /** Ends the attempt. Guarded on `in_progress` so two racing submits (e.g. a violation
+   *  auto-submit and the candidate's own click) can't both score it. */
+  async submit(
+    attemptId: string,
+    data: { autoSubmitted: boolean; score?: number; questionResults?: ITestQuestionResult[]; terminationReason?: string; event?: ITestAttemptEvent }
+  ): Promise<ITestAttempt | null> {
+    return TestAttempt.findOneAndUpdate(
+      { _id: attemptId, status: 'in_progress' },
+      {
+        $set: {
+          status: 'submitted',
+          submittedAt: new Date(),
+          autoSubmitted: data.autoSubmitted,
+          score: data.score,
+          questionResults: data.questionResults,
+          ...(data.terminationReason ? { terminationReason: data.terminationReason } : {}),
+        },
+        ...(data.event ? { $push: { events: data.event } } : {}),
+      },
       { new: true }
     );
   },

@@ -139,10 +139,11 @@ async function main() {
   // candidate's batch with a known access code.
   const { Test, TestAssignment } = await import('../features/tests/test.model');
   const { SAMPLE_TEST_TEMPLATE } = await import('../features/tests/sample-test.template');
+  const { paperTotalMarks } = await import('../features/tests/test-paper');
   const facultyUserId = String((await User.findOne({ email: 'faculty@demo.edu' }))!._id);
   const sampleTest = await Test.create({
     ...SAMPLE_TEST_TEMPLATE,
-    totalMarks: SAMPLE_TEST_TEMPLATE.questions.reduce((sum, q) => sum + q.marks, 0),
+    totalMarks: paperTotalMarks(SAMPLE_TEST_TEMPLATE.questions, SAMPLE_TEST_TEMPLATE.sections),
     status: 'approved',
     reviewedBy: adminId,
     reviewedAt: new Date(),

@@ -15,9 +15,10 @@ import {
   submitCodeSchema,
   markViewedSchema,
 } from './test.validation';
-import { ITest, ITestAttempt, ITestAssignment, ITestQuestionSnapshot, ITestSection, CodingLanguage, ITestQuestionResult, QuestionResultStatus } from './test.model';
+import { ITest, ITestAttempt, ITestAssignment, ITestQuestionSnapshot, ITestSection, CodingLanguage, ITestQuestionResult, QuestionResultStatus, ITestAttemptEvent, TestAttemptEventType } from './test.model';
 import { SAMPLE_TEST_TEMPLATE } from './sample-test.template';
-import { NotFoundError, ValidationError, ForbiddenError } from '../../middlewares/errorHandler';
+import { drawQuestionOrder, paperQuestionCount } from './test-paper';
+import { NotFoundError, ValidationError, ForbiddenError, ConflictError } from '../../middlewares/errorHandler';
 import { AuthContext } from '../../lib/auth-context';
 import { candidateRepository } from '../candidates/candidate.repository';
 import { resolveCandidateId } from '../candidates/candidate.service';
@@ -42,13 +43,18 @@ import type {
   TestResultAnalysis,
   TestSectionPerformance,
   TestTopicAnalysisRow,
+  TestMonitor,
+  TestMonitorRow,
+  TestAttemptEvent as TestAttemptEventApiShape,
+  TestHeartbeatResult,
+  TestViolationType,
 } from '@placementos/types';
 
 const idOf = (doc: unknown) => String((doc as { _id: { toString(): string } })._id);
 
 /** Tests created before sections existed have none — they read as one implicit section. */
 const sectionsOf = (t: Pick<ITest, 'sections'>): ITestSection[] =>
-  t.sections?.length ? t.sections.map((s) => ({ title: s.title, description: s.description })) : [{ title: 'Questions' }];
+  t.sections?.length ? t.sections.map((s) => ({ title: s.title, description: s.description, pickCount: s.pickCount })) : [{ title: 'Questions' }];
 
 const toTestApiShape = (t: ITest): TestApiShape => ({
   _id: idOf(t),
@@ -62,6 +68,7 @@ const toTestApiShape = (t: ITest): TestApiShape => ({
   totalMarks: t.totalMarks,
   durationMinutes: t.durationMinutes,
   violationLimit: t.violationLimit,
+  allowedFullscreenExits: t.allowedFullscreenExits ?? 1,
   status: t.status,
   contentName: t.contentName,
   topic: t.topic,
@@ -119,6 +126,7 @@ const toAttemptApiShape = (a: ITestAttempt): TestAttemptApiShape => ({
   proctoring: a.proctoring ? { ipAddresses: a.proctoring.ipAddresses, os: a.proctoring.os, browser: a.proctoring.browser } : undefined,
   resumeCount: a.resumeCount,
   questionResults: a.questionResults,
+  terminationReason: a.terminationReason,
 });
 
 /** Best-effort User-Agent sniff — just enough to fill "OS Used" / "Browser Used" on the
@@ -130,11 +138,74 @@ function parseUserAgent(ua?: string): { os?: string; browser?: string } {
   return { os, browser };
 }
 
-/** This attempt's question order, falling back to the identity order for attempts created
- *  before per-candidate randomization existed (or a mismatched/corrupt stored order). */
+/** This attempt's paper: the paper-order indexes of the questions this candidate was dealt,
+ *  in the order they see them — a subset of the test when sections draw from a pool. Falls
+ *  back to every question in paper order for attempts created before randomization existed
+ *  (or a corrupt stored order). */
 function orderFor(attempt: ITestAttempt, questionCount: number): number[] {
-  if (attempt.questionOrder?.length === questionCount) return attempt.questionOrder;
+  const stored = attempt.questionOrder ?? [];
+  if (stored.length > 0 && stored.length <= questionCount && stored.every((i) => i >= 0 && i < questionCount)) return stored;
   return Array.from({ length: questionCount }, (_, i) => i);
+}
+
+// ── Session lock & audit trail ────────────────────────────────────────────────
+// An attempt is driven by exactly one browser session at a time (the client sends a per-tab
+// id in X-Attempt-Session). A second window/device is refused while the first is alive, and
+// a resume from a network the attempt has never been on needs staff approval — so nobody else
+// can sit the test for a candidate. Everything is recorded in `attempt.events`.
+
+/** A session is "alive" if it was heard from within this window (heartbeat is every 15s). */
+const LIVE_WINDOW_MS = 45_000;
+/** Server-side backstop for the timer: an attempt this far past its duration is closed. */
+const OVERTIME_GRACE_MS = 60_000;
+
+const deviceOf = (userAgent?: string) => {
+  const { os, browser } = parseUserAgent(userAgent);
+  return [os, browser].filter(Boolean).join(' · ') || undefined;
+};
+
+const eventOf = (type: TestAttemptEventType, ctx: AuthContext, detail?: string): ITestAttemptEvent => ({
+  type,
+  at: new Date(),
+  ip: ctx.ip,
+  device: deviceOf(ctx.userAgent),
+  detail,
+});
+
+const isLive = (attempt: Pick<ITestAttempt, 'status' | 'activeSession'>) =>
+  attempt.status === 'in_progress' && !!attempt.activeSession && Date.now() - new Date(attempt.activeSession.lastSeenAt).getTime() < LIVE_WINDOW_MS;
+
+/** Every candidate request on an open attempt goes through this: only the attempt's active
+ *  session may act on it, and a changed IP on that session is recorded. */
+async function assertActiveSession(attempt: ITestAttempt, ctx: AuthContext): Promise<void> {
+  const active = attempt.activeSession;
+  if (active && ctx.attemptSessionId !== active.id) {
+    throw new ConflictError('This test is now open in another window or device — this window has been disconnected.');
+  }
+  const ipChanged = !!ctx.ip && !!active?.ip && ctx.ip !== active.ip;
+  await testAttemptRepository.touchSession(idOf(attempt), ctx.ip, ipChanged ? eventOf('ip_changed', ctx, `${active!.ip} → ${ctx.ip}`) : undefined);
+}
+
+/** Loads the caller's own in-progress attempt and checks its session. */
+async function loadOwnOpenAttempt(attemptId: string, ctx: AuthContext): Promise<ITestAttempt> {
+  const candidateId = await resolveCandidateId(ctx);
+  const attempt = await testAttemptRepository.findById(attemptId, ctx.instituteId);
+  if (!attempt || attempt.candidateId !== candidateId) throw new NotFoundError('Test attempt');
+  if (attempt.status !== 'in_progress') throw new ValidationError('This attempt has already been submitted');
+  await assertActiveSession(attempt, ctx);
+  return attempt;
+}
+
+/** Grades and closes an attempt on the system's or staff's behalf, logging why. */
+async function endAttempt(test: ITest, attempt: ITestAttempt, reason: string, event: ITestAttemptEvent): Promise<ITestAttempt | null> {
+  const graded = await scoreAttemptDetailed(test, attempt);
+  return testAttemptRepository.submit(idOf(attempt), {
+    autoSubmitted: true,
+    score: graded.score,
+    questionResults: graded.questionResults,
+    terminationReason: reason,
+    event,
+  });
 }
 
 /** Client-facing question indexes are always positions in the candidate's shuffled order —
@@ -248,7 +319,8 @@ async function scoreAttemptDetailed(test: ITest, attempt: ITestAttempt): Promise
   };
 
   const questionResults = await Promise.all(
-    test.questions.map(async (question, i): Promise<ITestQuestionResult> => {
+    orderFor(attempt, test.questions.length).map(async (i): Promise<ITestQuestionResult> => {
+      const question = test.questions[i];
       const answer = answerByIndex.get(i);
       const hasAnswer = !!answer && !!(answer.selectedOption?.trim() || answer.answerText?.trim() || answer.code?.trim());
       if (!answer || !hasAnswer) return { questionIndex: i, status: viewed.has(i) ? 'skipped' : 'not_viewed', marksObtained: 0 };
@@ -309,6 +381,7 @@ export const testService = {
       questions: questions.map((q) => ({ ...q, sectionIndex: 0 })),
       durationMinutes: input.durationMinutes,
       violationLimit: input.violationLimit,
+      allowedFullscreenExits: 1,
       contentName: input.contentName,
       topic: input.topic,
       sourceContent: input.sourceContent,
@@ -400,7 +473,7 @@ export const testService = {
           track: test.track,
           totalMarks: test.totalMarks,
           durationMinutes: test.durationMinutes,
-          questionCount: test.questions.length,
+          questionCount: paperQuestionCount(test.questions, test.sections),
         };
       })
       .filter((a): a is TestAssignmentWithTest => !!a);
@@ -520,16 +593,18 @@ export const testService = {
     const testSections = sectionsOf(test);
     const sectionOf = (q: ITestQuestionSnapshot) =>
       q.section?.trim() || (test.sections?.length ? testSections[q.sectionIndex ?? 0]?.title : undefined) || 'General';
-    const sectionNames = [...new Set(test.questions.map(sectionOf))];
+    // With question pools each candidate answers a subset — analyse only their own paper.
+    const onPaper = new Set(orderFor(attempt, test.questions.length));
+    const paper = test.questions.map((q, i) => ({ q, i })).filter(({ i }) => onPaper.has(i));
+    const sectionNames = [...new Set(paper.map(({ q }) => sectionOf(q)))];
 
     const sectionScoresFor = (results: ITestQuestionResult[] | undefined): Record<string, number> => {
       const scores: Record<string, number> = {};
       for (const name of sectionNames) scores[name] = 0;
-      const byIndex = new Map((results ?? []).map((r) => [r.questionIndex, r]));
-      test.questions.forEach((q, i) => {
-        const r = byIndex.get(i);
-        if (r) scores[sectionOf(q)] += r.marksObtained;
-      });
+      for (const r of results ?? []) {
+        const q = test.questions[r.questionIndex];
+        if (q && sectionOf(q) in scores) scores[sectionOf(q)] += r.marksObtained;
+      }
       return scores;
     };
 
@@ -537,8 +612,8 @@ export const testService = {
     const mySectionScores = sectionScoresFor(questionResults);
 
     const sections: TestSectionPerformance[] = sectionNames.map((name) => {
-      const indexesInSection = new Set(test.questions.map((q, i) => (sectionOf(q) === name ? i : -1)).filter((i) => i >= 0));
-      const qs = test.questions.filter((q) => sectionOf(q) === name);
+      const indexesInSection = new Set(paper.filter(({ q }) => sectionOf(q) === name).map(({ i }) => i));
+      const qs = paper.filter(({ q }) => sectionOf(q) === name).map(({ q }) => q);
       const myResults = questionResults.filter((r) => indexesInSection.has(r.questionIndex));
       const scoresAcross = allSectionScores.map((s) => s[name] ?? 0);
 
@@ -588,7 +663,7 @@ export const testService = {
     type MarksAgg = { topic: string; subTopic: string; correctMarks: number; partialMarks: number; totalMarks: number };
     const marksMap = new Map<string, MarksAgg>();
 
-    test.questions.forEach((q, i) => {
+    paper.forEach(({ q, i }) => {
       const topic = sectionOf(q);
       const subTopic = q.topic?.trim() || 'General';
       const key = `${topic}::${subTopic}`;
@@ -647,10 +722,13 @@ export const testService = {
     return {
       candidateName: candidate?.fullName ?? 'Unknown',
       candidateEmail: candidate?.email,
+      batch: candidate?.batch,
       testTitle: test.title,
       track: test.track,
       ipAddresses: attempt.proctoring?.ipAddresses ?? [],
       tabSwitches: attempt.violations.filter((v) => v.type === 'tab_switch').length,
+      violationCount: attempt.violations.length,
+      autoSubmitted: !!attempt.autoSubmitted,
       os: attempt.proctoring?.os,
       browser: attempt.proctoring?.browser,
       durationSeconds,
@@ -665,7 +743,7 @@ export const testService = {
       leastPerforming,
       countWiseAnalysis,
       marksWiseAnalysis,
-      questions: test.questions.map((q, i) => {
+      questions: paper.map(({ q, i }) => {
         const answer = attempt.answers.find((a) => a.questionIndex === i);
         const r = resultByIndex.get(i);
         return {
@@ -690,6 +768,15 @@ export const testService = {
 
   // ── Candidate-facing ─────────────────────────────────────────────────────
 
+  /** The candidate's own Result & Analysis for an assignment — only once they've submitted. */
+  async getMyResultAnalysis(assignmentId: string, ctx: AuthContext): Promise<TestResultAnalysis> {
+    const candidateId = await resolveCandidateId(ctx);
+    const attempt = await testAttemptRepository.findByAssignmentAndCandidate(assignmentId, candidateId, ctx.instituteId);
+    if (!attempt) throw new NotFoundError('Test attempt');
+    if (attempt.status !== 'submitted') throw new ForbiddenError('Your result is available once the test is submitted');
+    return testService.getResultAnalysis(attempt.testId, idOf(attempt), ctx);
+  },
+
   async listMine(ctx: AuthContext): Promise<TestForCandidate[]> {
     const candidateId = await resolveCandidateId(ctx);
     const candidate = await candidateRepository.findById(candidateId, ctx.instituteId);
@@ -713,7 +800,7 @@ export const testService = {
         totalMarks: test.totalMarks,
         durationMinutes: test.durationMinutes,
         violationLimit: test.violationLimit,
-        questionCount: test.questions.length,
+        questionCount: paperQuestionCount(test.questions, test.sections),
         scheduledAt: a.scheduledAt ? new Date(a.scheduledAt).toISOString() : undefined,
         codeIssued: !!a.accessCodeIssuedAt,
         attemptStatus: attempt?.status,
@@ -744,6 +831,10 @@ export const testService = {
     let attempt = await testAttemptRepository.findByAssignmentAndCandidate(assignmentId, candidateId, ctx.instituteId);
     if (attempt && attempt.status === 'submitted') throw new ForbiddenError('You have already submitted this test');
 
+    const sessionId = ctx.attemptSessionId;
+    if (!sessionId) throw new ValidationError('Missing test session — reload the page and try again.');
+    const session = { id: sessionId, ip: ctx.ip, device: deviceOf(ctx.userAgent) };
+
     // A returning candidate resuming an in-progress attempt doesn't need to re-enter the code —
     // only the very first start of an attempt is gated on it.
     if (!attempt) {
@@ -756,13 +847,42 @@ export const testService = {
       if (!isValid) throw new ForbiddenError('Incorrect access code');
 
       const { os, browser } = parseUserAgent(ctx.userAgent);
-      attempt = await testAttemptRepository.create(ctx.instituteId, assignment.testId, assignmentId, candidateId, test.questions.map((q) => q.sectionIndex ?? 0), {
-        ipAddresses: ctx.ip ? [ctx.ip] : [],
-        os,
-        browser,
-      });
+      attempt = await testAttemptRepository.create(
+        ctx.instituteId,
+        assignment.testId,
+        assignmentId,
+        candidateId,
+        drawQuestionOrder(test.questions, test.sections),
+        { ipAddresses: ctx.ip ? [ctx.ip] : [], os, browser },
+        session,
+        eventOf('started', ctx)
+      );
     } else {
-      attempt = (await testAttemptRepository.recordResume(idOf(attempt), ctx.ip)) ?? attempt;
+      const active = attempt.activeSession;
+      const sameSession = active?.id === sessionId;
+      if (!sameSession) {
+        // Another window/device is still driving this attempt — refuse, don't steal it.
+        if (isLive(attempt)) {
+          await testAttemptRepository.pushEvent(idOf(attempt), eventOf('session_blocked', ctx, `Second window refused while the test is live on ${active!.ip ?? 'another device'}`));
+          throw new ConflictError('This test is already open in another browser or device. Only one session can run a test at a time — close it there first.');
+        }
+        // A network this attempt has never been on needs staff to vouch for it first.
+        const knownIps = attempt.proctoring?.ipAddresses ?? [];
+        if (ctx.ip && knownIps.length > 0 && !knownIps.includes(ctx.ip) && !attempt.allowNewDevice) {
+          await testAttemptRepository.pushEvent(idOf(attempt), eventOf('session_blocked', ctx, `Resume from a new network refused (known: ${knownIps.join(', ')})`), { newDeviceBlocked: true });
+          throw new ForbiddenError('This test was started on a different network/device. Ask your TPO or faculty to allow this device from the test monitor, then try again.');
+        }
+      }
+      const eventType: TestAttemptEventType = sameSession || !active ? 'resumed' : 'session_takeover';
+      const detail = eventType === 'session_takeover' ? `Took over from ${active!.ip ?? 'unknown IP'}${attempt.allowNewDevice ? ' (allowed by staff)' : ''}` : undefined;
+      attempt = (await testAttemptRepository.openSession(idOf(attempt), session, { newSession: !sameSession }, eventOf(eventType, ctx, detail))) ?? attempt;
+    }
+
+    // Past its time already (e.g. the candidate closed the tab and came back much later) —
+    // close it now rather than reopening an expired paper.
+    if (Date.now() > new Date(attempt.startedAt).getTime() + test.durationMinutes * 60_000 + OVERTIME_GRACE_MS) {
+      await endAttempt(test, attempt, 'Time limit reached', eventOf('auto_submitted', ctx, 'Time limit reached'));
+      throw new ForbiddenError('The time for this test is over — your attempt has been submitted.');
     }
 
     // Each candidate sees the paper's questions in their own shuffled order — defeats a
@@ -794,16 +914,15 @@ export const testService = {
       }),
       durationMinutes: test.durationMinutes,
       violationLimit: test.violationLimit,
+      allowedFullscreenExits: test.allowedFullscreenExits ?? 1,
+      fullscreenExitsUsed: attempt.violations.filter((v) => v.type === 'fullscreen_exit').length,
       serverTime: new Date().toISOString(),
     };
   },
 
   async submitAnswer(attemptId: string, rawInput: unknown, ctx: AuthContext): Promise<TestAttemptApiShape> {
     const data = submitAnswerSchema.parse(rawInput);
-    const candidateId = await resolveCandidateId(ctx);
-    const attempt = await testAttemptRepository.findById(attemptId, ctx.instituteId);
-    if (!attempt || attempt.candidateId !== candidateId) throw new NotFoundError('Test attempt');
-    if (attempt.status !== 'in_progress') throw new ValidationError('This attempt has already been submitted');
+    const attempt = await loadOwnOpenAttempt(attemptId, ctx);
 
     const test = await testRepository.findById(attempt.testId, ctx.instituteId);
     if (!test) throw new NotFoundError('Test');
@@ -822,24 +941,39 @@ export const testService = {
     const candidateId = await resolveCandidateId(ctx);
     const attempt = await testAttemptRepository.findById(attemptId, ctx.instituteId);
     if (!attempt || attempt.candidateId !== candidateId) throw new NotFoundError('Test attempt');
-    if (attempt.status !== 'in_progress') {
-      return { violationCount: attempt.violations.length, limit: 0, autoSubmitted: attempt.autoSubmitted };
-    }
-
     const test = await testRepository.findById(attempt.testId, ctx.instituteId);
     if (!test) throw new NotFoundError('Test');
+    const allowedFullscreenExits = test.allowedFullscreenExits ?? 1;
+    const fullscreenExitsOf = (a: ITestAttempt) => a.violations.filter((v) => v.type === 'fullscreen_exit').length;
 
-    const updated = await testAttemptRepository.pushViolation(attemptId, { type: data.type, at: new Date(), detail: data.detail });
-    const violationCount = updated?.violations.length ?? attempt.violations.length + 1;
-
-    let autoSubmitted = false;
-    if (violationCount > test.violationLimit) {
-      const graded = updated ? await scoreAttemptDetailed(test, updated) : undefined;
-      await testAttemptRepository.submit(attemptId, { autoSubmitted: true, score: graded?.score, questionResults: graded?.questionResults });
-      autoSubmitted = true;
+    if (attempt.status !== 'in_progress') {
+      return {
+        violationCount: attempt.violations.length,
+        limit: test.violationLimit,
+        autoSubmitted: attempt.autoSubmitted,
+        fullscreenExitsUsed: fullscreenExitsOf(attempt),
+        allowedFullscreenExits,
+        terminationReason: attempt.terminationReason,
+      };
     }
+    await assertActiveSession(attempt, ctx);
 
-    return { violationCount, limit: test.violationLimit, autoSubmitted };
+    const label = data.detail ? `${data.type}: ${data.detail}` : data.type;
+    const updated = (await testAttemptRepository.pushViolation(attemptId, { type: data.type, at: new Date(), detail: data.detail }, eventOf('violation', ctx, label))) ?? attempt;
+    const violationCount = updated.violations.length;
+    const fullscreenExitsUsed = fullscreenExitsOf(updated);
+
+    // Zero tolerance for extensions and extra screens; fullscreen exits have their own small
+    // allowance; everything else counts toward the general violation limit.
+    let terminationReason: string | undefined;
+    if (data.type === 'extension_detected') terminationReason = `Browser extension detected${data.detail ? ` — ${data.detail}` : ''}`;
+    else if (data.type === 'multiple_screens') terminationReason = 'Multiple screens detected';
+    else if (data.type === 'fullscreen_exit' && fullscreenExitsUsed > allowedFullscreenExits) terminationReason = `Left fullscreen ${fullscreenExitsUsed} times (allowed ${allowedFullscreenExits})`;
+    else if (violationCount > test.violationLimit) terminationReason = `Violation limit exceeded (${violationCount} of ${test.violationLimit} allowed)`;
+
+    if (terminationReason) await endAttempt(test, updated, terminationReason, eventOf('auto_submitted', ctx, terminationReason));
+
+    return { violationCount, limit: test.violationLimit, autoSubmitted: !!terminationReason, fullscreenExitsUsed, allowedFullscreenExits, terminationReason };
   },
 
   /** Best-effort telemetry from the candidate's client — records that a question was
@@ -852,6 +986,7 @@ export const testService = {
     const attempt = await testAttemptRepository.findById(attemptId, ctx.instituteId);
     if (!attempt || attempt.candidateId !== candidateId) throw new NotFoundError('Test attempt');
     if (attempt.status !== 'in_progress') return;
+    await assertActiveSession(attempt, ctx);
 
     const test = await testRepository.findById(attempt.testId, ctx.instituteId);
     if (!test) throw new NotFoundError('Test');
@@ -861,18 +996,183 @@ export const testService = {
   },
 
   async submit(attemptId: string, ctx: AuthContext): Promise<TestAttemptApiShape> {
-    const candidateId = await resolveCandidateId(ctx);
-    const attempt = await testAttemptRepository.findById(attemptId, ctx.instituteId);
-    if (!attempt || attempt.candidateId !== candidateId) throw new NotFoundError('Test attempt');
-    if (attempt.status !== 'in_progress') throw new ValidationError('This attempt has already been submitted');
+    const attempt = await loadOwnOpenAttempt(attemptId, ctx);
 
     const test = await testRepository.findById(attempt.testId, ctx.instituteId);
     if (!test) throw new NotFoundError('Test');
 
     const { score, questionResults } = await scoreAttemptDetailed(test, attempt);
-    const updated = await testAttemptRepository.submit(attemptId, { autoSubmitted: false, score, questionResults });
-    if (!updated) throw new NotFoundError('Test attempt');
+    const updated = await testAttemptRepository.submit(attemptId, { autoSubmitted: false, score, questionResults, event: eventOf('submitted', ctx, `Score ${score}/${test.totalMarks}`) });
+    if (!updated) throw new ValidationError('This attempt has already been submitted');
     return toAttemptApiShape(updated);
+  },
+
+  /** Candidate client pings every ~15s: keeps the session alive (and the session lock held),
+   *  records IP changes, closes an attempt that's run past its time, and tells a window that
+   *  was ended by staff/violations — or replaced by another session — to stop. */
+  async heartbeat(attemptId: string, ctx: AuthContext): Promise<TestHeartbeatResult> {
+    const candidateId = await resolveCandidateId(ctx);
+    const attempt = await testAttemptRepository.findById(attemptId, ctx.instituteId);
+    if (!attempt || attempt.candidateId !== candidateId) throw new NotFoundError('Test attempt');
+    if (attempt.status !== 'in_progress') return { status: attempt.status, autoSubmitted: attempt.autoSubmitted, terminationReason: attempt.terminationReason };
+
+    await assertActiveSession(attempt, ctx);
+
+    const test = await testRepository.findById(attempt.testId, ctx.instituteId);
+    if (test && Date.now() > new Date(attempt.startedAt).getTime() + test.durationMinutes * 60_000 + OVERTIME_GRACE_MS) {
+      await endAttempt(test, attempt, 'Time limit reached', eventOf('auto_submitted', ctx, 'Time limit reached'));
+      return { status: 'submitted', autoSubmitted: true, terminationReason: 'Time limit reached' };
+    }
+    return { status: 'in_progress', autoSubmitted: false };
+  },
+
+  // ── Staff: live monitor & control ─────────────────────────────────────────
+
+  /** Everyone a test was sent to — started or not — with their attempt's live status, IPs,
+   *  devices, violations and full audit trail. Backs the staff monitor page and its exports. */
+  async getMonitor(testId: string, ctx: AuthContext): Promise<TestMonitor> {
+    const test = await testRepository.findById(testId, ctx.instituteId);
+    if (!test) throw new NotFoundError('Test');
+
+    const [attempts, assignments] = await Promise.all([
+      testAttemptRepository.findByTest(testId, ctx.instituteId),
+      testAssignmentRepository.findByTest(testId, ctx.instituteId),
+    ]);
+
+    // Who was this test sent to? (batch sendouts -> the batch's candidates; named sendouts -> those.)
+    const targets = new Map<string, string>(); // candidateId -> assignment label
+    for (const a of assignments) {
+      const label = assignmentLabel(a);
+      const ids =
+        a.targetType === 'batch' && a.batch
+          ? (await candidateRepository.findByBatch(ctx.instituteId, a.batch)).map((c) => idOf(c))
+          : a.candidateIds ?? [];
+      ids.forEach((id) => { if (!targets.has(id)) targets.set(id, label); });
+    }
+    const labelByAssignment = new Map(assignments.map((a) => [idOf(a), assignmentLabel(a)]));
+
+    const candidateIds = [...new Set([...targets.keys(), ...attempts.map((a) => a.candidateId)])];
+    const candidates = candidateIds.length ? await candidateRepository.findAllForSchoolByIds(candidateIds, ctx.instituteId) : [];
+    const candidateById = new Map(candidates.map((c) => [idOf(c), c]));
+
+    const questionCount = paperQuestionCount(test.questions, test.sections);
+    const iso = (d?: Date) => (d ? new Date(d).toISOString() : undefined);
+
+    const rowFor = (candidateId: string, attempt?: ITestAttempt): TestMonitorRow => {
+      const c = candidateById.get(candidateId);
+      const base = {
+        candidateId,
+        candidateName: c?.fullName ?? 'Unknown',
+        rollNumber: c?.rollNumber,
+        email: c?.email,
+        batch: c?.batch,
+        totalMarks: test.totalMarks,
+        questionCount,
+      };
+      if (!attempt) {
+        return {
+          ...base,
+          assignmentLabel: targets.get(candidateId),
+          status: 'not_started',
+          online: false,
+          answeredCount: 0,
+          ipAddresses: [],
+          ipChanges: 0,
+          sessionCount: 0,
+          resumeCount: 0,
+          violationCount: 0,
+          violationsByType: {},
+          fullscreenExits: 0,
+          tabSwitches: 0,
+          newDeviceBlocked: false,
+          timeline: [],
+        };
+      }
+
+      const violationsByType: Partial<Record<TestViolationType, number>> = {};
+      for (const v of attempt.violations) violationsByType[v.type] = (violationsByType[v.type] ?? 0) + 1;
+
+      // Violations are logged as events (with IP) since the audit trail existed; older
+      // attempts only have the bare violations list, so fall back to that.
+      const events = attempt.events ?? [];
+      const hasViolationEvents = events.some((e) => e.type === 'violation');
+      const timeline: TestAttemptEventApiShape[] = [
+        ...events.map((e) => ({ type: e.type, at: new Date(e.at).toISOString(), ip: e.ip, device: e.device, detail: e.detail })),
+        ...(hasViolationEvents ? [] : attempt.violations.map((v) => ({ type: 'violation' as const, at: new Date(v.at).toISOString(), detail: v.detail ? `${v.type}: ${v.detail}` : v.type }))),
+      ].sort((a, b) => a.at.localeCompare(b.at));
+
+      const ipAddresses = attempt.proctoring?.ipAddresses ?? [];
+      return {
+        ...base,
+        attemptId: idOf(attempt),
+        assignmentLabel: labelByAssignment.get(attempt.assignmentId),
+        status: attempt.status === 'in_progress' ? 'in_progress' : attempt.autoSubmitted ? 'auto_submitted' : 'submitted',
+        online: isLive(attempt),
+        lastSeenAt: iso(attempt.activeSession?.lastSeenAt),
+        startedAt: iso(attempt.startedAt),
+        submittedAt: iso(attempt.submittedAt),
+        score: attempt.status === 'submitted' ? attempt.score : undefined,
+        answeredCount: attempt.answers.filter((a) => a.selectedOption?.trim() || a.answerText?.trim() || a.code?.trim()).length,
+        currentIp: attempt.activeSession?.ip ?? ipAddresses[ipAddresses.length - 1],
+        ipAddresses,
+        ipChanges: Math.max(0, ipAddresses.length - 1),
+        sessionCount: attempt.sessionCount ?? 1,
+        resumeCount: attempt.resumeCount ?? 0,
+        os: attempt.proctoring?.os,
+        browser: attempt.proctoring?.browser,
+        violationCount: attempt.violations.length,
+        violationsByType,
+        fullscreenExits: violationsByType.fullscreen_exit ?? 0,
+        tabSwitches: violationsByType.tab_switch ?? 0,
+        terminationReason: attempt.terminationReason,
+        newDeviceBlocked: !!attempt.newDeviceBlocked,
+        timeline,
+      };
+    };
+
+    const attemptedCandidates = new Set(attempts.map((a) => a.candidateId));
+    const rows = [
+      ...attempts.map((a) => rowFor(a.candidateId, a)),
+      ...[...targets.keys()].filter((id) => !attemptedCandidates.has(id)).map((id) => rowFor(id)),
+    ].sort((a, b) => a.candidateName.localeCompare(b.candidateName));
+
+    return {
+      testId,
+      title: test.title,
+      track: test.track,
+      totalMarks: test.totalMarks,
+      durationMinutes: test.durationMinutes,
+      violationLimit: test.violationLimit,
+      allowedFullscreenExits: test.allowedFullscreenExits ?? 1,
+      questionCount,
+      poolSize: test.questions.length,
+      generatedAt: new Date().toISOString(),
+      rows,
+    };
+  },
+
+  /** Staff: lets a candidate whose resume from a new network/device was refused continue there. */
+  async allowNewDevice(attemptId: string, ctx: AuthContext): Promise<void> {
+    const attempt = await testAttemptRepository.findById(attemptId, ctx.instituteId);
+    if (!attempt) throw new NotFoundError('Test attempt');
+    if (attempt.status !== 'in_progress') throw new ValidationError('This attempt is already submitted');
+    await testAttemptRepository.pushEvent(attemptId, eventOf('new_device_allowed', ctx, `Allowed by ${ctx.displayName}`), {
+      allowNewDevice: true,
+      newDeviceBlocked: false,
+      // Release the lock so the new device doesn't also have to wait out the old session.
+      'activeSession.lastSeenAt': new Date(0),
+    });
+  },
+
+  /** Staff: ends a candidate's attempt now (grades what they've answered). */
+  async forceSubmit(attemptId: string, ctx: AuthContext): Promise<void> {
+    const attempt = await testAttemptRepository.findById(attemptId, ctx.instituteId);
+    if (!attempt) throw new NotFoundError('Test attempt');
+    if (attempt.status !== 'in_progress') throw new ValidationError('This attempt is already submitted');
+    const test = await testRepository.findById(attempt.testId, ctx.instituteId);
+    if (!test) throw new NotFoundError('Test');
+    const reason = `Ended by ${ctx.displayName}`;
+    await endAttempt(test, attempt, reason, eventOf('force_submitted', ctx, reason));
   },
 
   /** Candidate-facing "Run" — executes against a coding question's *visible* sample test
@@ -911,6 +1211,7 @@ export const testService = {
     // without being re-judged.
     const passedCount = result.status === 'ok' ? result.results.filter((r) => r.passed).length : 0;
     if (result.status !== 'not_configured') {
+      await testAttemptRepository.pushEvent(attemptId, eventOf('code_submitted', ctx, `Q${data.questionIndex + 1} · ${data.language} · ${passedCount}/${cases.length} cases`));
       await testAttemptRepository.setSubmission(attemptId, originalIndex, {
         code: data.code,
         language: data.language,
@@ -929,10 +1230,7 @@ export const testService = {
  *  position in the candidate's shuffled order; `originalIndex` is the paper's own index, which
  *  is what gets persisted. */
 async function loadCodingQuestion(attemptId: string, data: { questionIndex: number; language: CodingLanguage }, ctx: AuthContext) {
-  const candidateId = await resolveCandidateId(ctx);
-  const attempt = await testAttemptRepository.findById(attemptId, ctx.instituteId);
-  if (!attempt || attempt.candidateId !== candidateId) throw new NotFoundError('Test attempt');
-  if (attempt.status !== 'in_progress') throw new ValidationError('This attempt has already been submitted');
+  const attempt = await loadOwnOpenAttempt(attemptId, ctx);
 
   const test = await testRepository.findById(attempt.testId, ctx.instituteId);
   if (!test) throw new NotFoundError('Test');

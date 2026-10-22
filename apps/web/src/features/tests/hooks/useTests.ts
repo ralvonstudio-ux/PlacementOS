@@ -22,6 +22,7 @@ export const testKeys = {
   assignments: (testId: string) => [...testKeys.all, 'assignments', testId] as const,
   allAssignments: () => [...testKeys.all, 'assignments', 'all'] as const,
   analysis: (testId: string, attemptId: string) => [...testKeys.all, 'analysis', testId, attemptId] as const,
+  monitor: (testId: string) => [...testKeys.all, 'monitor', testId] as const,
 };
 
 export const useTestList = () =>
@@ -112,6 +113,9 @@ export const useTestResultAnalysis = (testId: string | null, attemptId: string |
     enabled: !!testId && !!attemptId,
   });
 
+export const useMyTestResult = (assignmentId: string | null) =>
+  useQuery({ queryKey: [...testKeys.mine(), 'result', assignmentId ?? ''], queryFn: () => testsApi.getMyResult(assignmentId!), enabled: !!assignmentId });
+
 export const useMyTests = () =>
   useQuery({ queryKey: testKeys.mine(), queryFn: testsApi.listMine });
 
@@ -148,3 +152,17 @@ export const useLoadSampleTemplate = () =>
   useMutation({ mutationFn: () => testsApi.getSampleTemplate() });
 export const useMarkQuestionViewed = () =>
   useMutation({ mutationFn: ({ attemptId, payload }: { attemptId: string; payload: MarkViewedPayload }) => testsApi.markViewed(attemptId, payload) });
+
+/** Live monitor — refreshed every 10s while the page is open. */
+export const useTestMonitor = (testId: string | undefined) =>
+  useQuery({ queryKey: testKeys.monitor(testId ?? ''), queryFn: () => testsApi.getMonitor(testId!), enabled: !!testId, refetchInterval: 10_000 });
+
+export const useAllowNewDevice = () => {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: (attemptId: string) => testsApi.allowNewDevice(attemptId), onSuccess: () => qc.invalidateQueries({ queryKey: [...testKeys.all, 'monitor'] }) });
+};
+
+export const useForceSubmitAttempt = () => {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: (attemptId: string) => testsApi.forceSubmit(attemptId), onSuccess: () => qc.invalidateQueries({ queryKey: [...testKeys.all, 'monitor'] }) });
+};

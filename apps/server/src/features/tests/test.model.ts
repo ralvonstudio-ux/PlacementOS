@@ -17,6 +17,8 @@ export interface ITestCase {
 export interface ITestSection {
   title: string;
   description?: string;
+  /** Question pool: how many of this section's questions each candidate draws at random. */
+  pickCount?: number;
 }
 
 export type QuestionDifficulty = 'easy' | 'medium' | 'hard';
@@ -50,6 +52,8 @@ export interface ITest extends Document {
   totalMarks: number;
   durationMinutes: number;
   violationLimit: number;
+  /** Fullscreen exits tolerated (test pauses until restored); the next exit ends the attempt. */
+  allowedFullscreenExits: number;
   status: TestStatus;
   /** The faculty-given label for the uploaded/pasted source material, and the topic
    *  it covers — both optional, only meaningful when the test was AI-drafted. */
@@ -81,7 +85,7 @@ const testCaseSchema = new Schema<ITestCase>(
 );
 
 const sectionSchema = new Schema<ITestSection>(
-  { title: { type: String, required: true, trim: true }, description: { type: String, trim: true } },
+  { title: { type: String, required: true, trim: true }, description: { type: String, trim: true }, pickCount: { type: Number, min: 1 } },
   { _id: false }
 );
 
@@ -116,6 +120,7 @@ const testSchema = new Schema<ITest>(
     totalMarks: { type: Number, required: true, min: 0 },
     durationMinutes: { type: Number, required: true, min: 1 },
     violationLimit: { type: Number, required: true, min: 1, default: 3 },
+    allowedFullscreenExits: { type: Number, min: 0, default: 1 },
     status: { type: String, enum: ['draft', 'pending_approval', 'approved', 'rejected'], default: 'draft' },
     contentName: { type: String, trim: true },
     topic: { type: String, trim: true },
@@ -195,7 +200,8 @@ export type TestViolationType =
   | 'devtools'
   | 'no_face'
   | 'screen_share_stopped'
-  | 'extension_detected';
+  | 'extension_detected'
+  | 'multiple_screens';
 
 const TEST_VIOLATION_TYPES = [
   'tab_switch',
@@ -207,6 +213,7 @@ const TEST_VIOLATION_TYPES = [
   'no_face',
   'screen_share_stopped',
   'extension_detected',
+  'multiple_screens',
 ] as const;
 
 export interface ITestViolation {
@@ -273,6 +280,18 @@ export interface ITestAttempt extends Document {
   proctoring?: ITestProctoringInfo;
   resumeCount: number;
   questionResults?: ITestQuestionResult[];
+  /** Audit trail: starts, resumes, session takeovers/blocks, IP changes, violations, submits. */
+  events: ITestAttemptEvent[];
+  /** The one browser session allowed to drive this attempt right now — see test.service's
+   *  session lock. `lastSeenAt` is refreshed by every candidate request and the heartbeat. */
+  activeSession?: { id: string; ip?: string; device?: string; lastSeenAt: Date };
+  /** Distinct browser sessions that have driven this attempt. */
+  sessionCount: number;
+  /** A resume from a new network was refused and is waiting on staff. */
+  newDeviceBlocked: boolean;
+  /** Staff allowed the next resume to come from a new device/network (one-shot). */
+  allowNewDevice: boolean;
+  terminationReason?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -310,6 +329,47 @@ const proctoringSchema = new Schema<ITestProctoringInfo>(
   { _id: false }
 );
 
+export type TestAttemptEventType =
+  | 'started'
+  | 'resumed'
+  | 'session_takeover'
+  | 'session_blocked'
+  | 'ip_changed'
+  | 'violation'
+  | 'code_submitted'
+  | 'submitted'
+  | 'auto_submitted'
+  | 'force_submitted'
+  | 'new_device_allowed';
+
+export interface ITestAttemptEvent {
+  type: TestAttemptEventType;
+  at: Date;
+  ip?: string;
+  device?: string;
+  detail?: string;
+}
+
+const attemptEventSchema = new Schema<ITestAttemptEvent>(
+  {
+    type: {
+      type: String,
+      enum: ['started', 'resumed', 'session_takeover', 'session_blocked', 'ip_changed', 'violation', 'code_submitted', 'submitted', 'auto_submitted', 'force_submitted', 'new_device_allowed'],
+      required: true,
+    },
+    at: { type: Date, required: true },
+    ip: { type: String },
+    device: { type: String },
+    detail: { type: String },
+  },
+  { _id: false }
+);
+
+const activeSessionSchema = new Schema(
+  { id: { type: String, required: true }, ip: { type: String }, device: { type: String }, lastSeenAt: { type: Date, required: true } },
+  { _id: false }
+);
+
 const questionResultSchema = new Schema<ITestQuestionResult>(
   {
     questionIndex: { type: Number, required: true },
@@ -337,6 +397,12 @@ const testAttemptSchema = new Schema<ITestAttempt>(
     proctoring: { type: proctoringSchema },
     resumeCount: { type: Number, default: 0 },
     questionResults: { type: [questionResultSchema] },
+    events: { type: [attemptEventSchema], default: [] },
+    activeSession: { type: activeSessionSchema },
+    sessionCount: { type: Number, default: 0 },
+    newDeviceBlocked: { type: Boolean, default: false },
+    allowNewDevice: { type: Boolean, default: false },
+    terminationReason: { type: String },
   },
   { timestamps: true, versionKey: false }
 );
