@@ -1,6 +1,6 @@
 import mongoose, { Document, Schema } from 'mongoose';
 
-export type NotificationType = 'test_access_code' | 'staff_message';
+export type NotificationType = 'test_access_code' | 'staff_message' | 'placement_drive';
 export type NotificationRecipientRole = 'candidate' | 'faculty';
 export type NotificationPriority = 'normal' | 'high';
 
@@ -30,7 +30,7 @@ const notificationSchema = new Schema<INotification>(
     instituteId: { type: String, required: true, index: true },
     recipientId: { type: String, required: true },
     recipientRole: { type: String, enum: ['candidate', 'faculty'], required: true, default: 'candidate' },
-    type: { type: String, enum: ['test_access_code', 'staff_message'], required: true },
+    type: { type: String, enum: ['test_access_code', 'staff_message', 'placement_drive'], required: true },
     title: { type: String, required: true, trim: true },
     body: { type: String, required: true, trim: true },
     relatedTestId: { type: String },

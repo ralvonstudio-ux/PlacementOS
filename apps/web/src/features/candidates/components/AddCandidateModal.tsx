@@ -1,24 +1,38 @@
 import { useState, FormEvent } from 'react';
 import { X } from 'lucide-react';
-import { useCreateCandidate } from '../hooks/useCandidates';
+import { useCreateCandidate, useUpdateCandidate } from '../hooks/useCandidates';
 import { extractErrorMessage } from '@/services/api';
+import type { Candidate } from '@placementos/types';
 
-export function AddCandidateModal({ onClose }: { onClose: () => void }) {
-  const [fullName, setFullName] = useState('');
-  const [rollNumber, setRollNumber] = useState('');
-  const [batch, setBatch] = useState('');
-  const [department, setDepartment] = useState('');
-  const [placementYear, setPlacementYear] = useState('');
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
+/** Add a student, or edit one when `candidate` is passed. */
+export function AddCandidateModal({ onClose, candidate }: { onClose: () => void; candidate?: Candidate }) {
+  const [fullName, setFullName] = useState(candidate?.fullName ?? '');
+  const [rollNumber, setRollNumber] = useState(candidate?.rollNumber ?? '');
+  const [batch, setBatch] = useState(candidate?.batch ?? '');
+  const [department, setDepartment] = useState(candidate?.department ?? '');
+  const [placementYear, setPlacementYear] = useState(candidate?.placementYear ?? '');
+  const [email, setEmail] = useState(candidate?.email ?? '');
+  const [phone, setPhone] = useState(candidate?.phone ?? '');
+  const [cgpa, setCgpa] = useState(candidate?.cgpa?.toString() ?? '');
+  const [backlogs, setBacklogs] = useState(candidate?.activeBacklogs?.toString() ?? '');
   const [error, setError] = useState('');
-  const { mutateAsync, isPending } = useCreateCandidate();
+  const create = useCreateCandidate();
+  const update = useUpdateCandidate();
+  const isPending = create.isPending || update.isPending;
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError('');
+    const payload = {
+      fullName, rollNumber, batch, department, placementYear,
+      email: email || undefined,
+      phone: phone || undefined,
+      cgpa: cgpa.trim() ? Number(cgpa) : undefined,
+      activeBacklogs: backlogs.trim() ? Number(backlogs) : undefined,
+    };
     try {
-      await mutateAsync({ fullName, rollNumber, batch, department, placementYear, email: email || undefined, phone: phone || undefined });
+      if (candidate) await update.mutateAsync({ id: candidate._id, payload });
+      else await create.mutateAsync(payload);
       onClose();
     } catch (err) {
       setError(extractErrorMessage(err));
@@ -32,7 +46,7 @@ export function AddCandidateModal({ onClose }: { onClose: () => void }) {
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
       <form onSubmit={handleSubmit} className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
         <button type="button" onClick={onClose} className="absolute top-4 right-4 p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"><X className="w-4 h-4" /></button>
-        <h2 className="text-lg font-bold text-gray-900 mb-5">Add Student</h2>
+        <h2 className="text-lg font-bold text-gray-900 mb-5">{candidate ? 'Edit Student' : 'Add Student'}</h2>
         <div className="space-y-3">
           <input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Full name" required className={inputCls} />
           <div className="grid grid-cols-2 gap-3">
@@ -47,9 +61,14 @@ export function AddCandidateModal({ onClose }: { onClose: () => void }) {
             <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email (optional)" type="email" className={inputCls} />
             <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Phone (optional)" className={inputCls} />
           </div>
+          <div className="grid grid-cols-2 gap-3">
+            <input value={cgpa} onChange={(e) => setCgpa(e.target.value)} placeholder="CGPA (0–10)" type="number" step="0.01" min="0" max="10" className={inputCls} />
+            <input value={backlogs} onChange={(e) => setBacklogs(e.target.value)} placeholder="Active backlogs" type="number" min="0" className={inputCls} />
+          </div>
+          <p className="text-[11px] text-gray-400 -mt-1">CGPA and backlogs decide which placement drives the student can apply to.</p>
           {error && <p className="text-sm text-red-600">{error}</p>}
           <button type="submit" disabled={isPending} className="w-full h-10 rounded-xl bg-violet-600 hover:bg-violet-700 text-sm font-semibold text-white transition-colors disabled:opacity-50">
-            {isPending ? 'Adding…' : 'Add Student'}
+            {isPending ? 'Saving…' : candidate ? 'Save Changes' : 'Add Student'}
           </button>
         </div>
       </form>
