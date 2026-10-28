@@ -26,6 +26,7 @@ import {
   UserCog,
   Upload,
   Star,
+  Briefcase,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
@@ -78,16 +79,22 @@ const NAV_SECTION_TPO_TESTS = [
   { label: 'Practice Library', icon: BookMarked, path: '/tpo/practice', end: false },
 ] as const;
 
+const NAV_SECTION_TPO_PLACEMENTS = [
+  { label: 'Placement Drives', icon: Briefcase, path: '/tpo/placements', end: false },
+] as const;
+
 const NAV_SECTION_ADMIN = [
   { label: 'Dashboard', icon: LayoutDashboard, path: '/admin', end: true },
   { label: 'Faculty', icon: Users, path: '/admin/faculty', end: false },
   { label: 'Candidates', icon: Users2, path: '/admin/candidates', end: false },
   // Admins share the TPO test pages (the /tpo area admits admins) — create, approve, monitor.
   { label: 'Tests & Monitoring', icon: ShieldCheck, path: '/tpo/tests', end: false },
+  { label: 'Placement Drives', icon: Briefcase, path: '/tpo/placements', end: false },
 ] as const;
 
 const NAV_SECTIONS_TPO = [
   { title: 'Overview', items: NAV_SECTION_TPO_OVERVIEW },
+  { title: 'Placements', items: NAV_SECTION_TPO_PLACEMENTS },
   { title: 'Approvals', items: NAV_SECTION_TPO_APPROVALS },
   { title: 'Academics', items: NAV_SECTION_TPO_ACADEMICS },
   { title: 'Timetable', items: NAV_SECTION_TPO_TIMETABLE },
@@ -105,6 +112,7 @@ const NAV_ITEMS_CANDIDATE = [
   { label: 'Practice Sheets', icon: BookMarked, path: '/candidate/practice-sheets', end: false },
   { label: 'Worksheets', icon: FileCheck2, path: '/candidate/worksheets', end: false },
   { label: 'Tests', icon: ShieldCheck, path: '/candidate/tests', end: false },
+  { label: 'Placement Drives', icon: Briefcase, path: '/candidate/placements', end: false },
   { label: 'Trainer Feedback', icon: Star, path: '/candidate/trainer-feedback', end: false },
 ] as const;
 

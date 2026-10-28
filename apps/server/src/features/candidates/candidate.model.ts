@@ -12,6 +12,9 @@ export interface ICandidate extends Document {
   phone?: string;
   placementYear: string;
   status: CandidateStatus;
+  /** Academic record for placement-drive eligibility. */
+  cgpa?: number;
+  activeBacklogs?: number;
   /** Admin/TPO-issued login address — separate from `email`, mirrors Faculty.loginEmail. */
   loginEmail?: string;
   /** Free-text note a faculty member can attach from the batch roster (attendance
@@ -40,6 +43,8 @@ const candidateSchema = new Schema<ICandidate>(
     phone: { type: String, trim: true },
     placementYear: { type: String, required: true, trim: true },
     status: { type: String, enum: CANDIDATE_STATUSES, default: 'active' },
+    cgpa: { type: Number, min: 0, max: 10 },
+    activeBacklogs: { type: Number, min: 0 },
     loginEmail: { type: String, trim: true, lowercase: true },
     facultyNote: { type: String, trim: true, maxlength: 2000 },
     isDeleted: { type: Boolean, default: false },

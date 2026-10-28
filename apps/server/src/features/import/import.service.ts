@@ -42,6 +42,8 @@ export const IMPORT_TEMPLATES: Record<ImportType, ImportField[]> = {
     { field: 'placementYear', label: 'Placement Year', required: true },
     { field: 'email', label: 'Email', required: false },
     { field: 'phone', label: 'Phone', required: false },
+    { field: 'cgpa', label: 'CGPA (0–10)', required: false },
+    { field: 'activeBacklogs', label: 'Active Backlogs', required: false },
   ],
   'training-schedule': [
     { field: 'batch', label: 'Batch', required: true },

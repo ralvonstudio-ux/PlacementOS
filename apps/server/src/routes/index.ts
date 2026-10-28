@@ -21,6 +21,7 @@ import contentExtractionRoutes from '../features/content-extraction/content-extr
 import academicPlanRoutes from '../features/academic-plan/academic-plan.routes';
 import importRoutes from '../features/import/import.routes';
 import trainerFeedbackRoutes from '../features/trainer-feedback/trainer-feedback.routes';
+import placementDriveRoutes from '../features/placement-drives/placement-drive.routes';
 
 const router = Router();
 
@@ -47,5 +48,6 @@ router.use('/content-extraction', contentExtractionRoutes);
 router.use('/academic-plan', academicPlanRoutes);
 router.use('/import', importRoutes);
 router.use('/trainer-feedback', trainerFeedbackRoutes);
+router.use('/placement-drives', placementDriveRoutes);
 
 export default router;

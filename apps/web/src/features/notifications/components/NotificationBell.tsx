@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bell, CheckCheck, KeyRound, MessageSquare } from 'lucide-react';
+import { Bell, CheckCheck, KeyRound, MessageSquare, Briefcase } from 'lucide-react';
 import { useAuth } from '@/features/auth/hooks/useAuth';
 import { useMyNotifications, useMarkNotificationRead, useMarkAllNotificationsRead } from '../hooks/useNotifications';
 import type { NotificationType } from '@placementos/types';
@@ -8,6 +8,7 @@ import type { NotificationType } from '@placementos/types';
 const NOTIFICATION_ICON: Record<NotificationType, typeof KeyRound> = {
   test_access_code: KeyRound,
   staff_message: MessageSquare,
+  placement_drive: Briefcase,
 };
 
 function timeAgo(iso: string): string {
