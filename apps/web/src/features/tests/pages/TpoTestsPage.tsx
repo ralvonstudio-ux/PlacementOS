@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ShieldCheck, Plus, Trash2, Send, Lock, CheckCircle2, XCircle, Sparkles, KeyRound, ChevronDown, ChevronUp, Users, Activity } from 'lucide-react';
+import { ShieldCheck, Plus, Trash2, Send, Lock, CheckCircle2, XCircle, Sparkles, KeyRound, ChevronDown, ChevronUp, Users, Activity, Camera, MonitorUp } from 'lucide-react';
 import { PageContainer } from '@/components/workspace/PageContainer';
 import { WorkspaceHeader } from '@/components/workspace/WorkspaceHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -14,6 +14,7 @@ import {
   useAssignments,
   useCreateAssignment,
   useCloseAssignment,
+  useSetTestMediaRequirements,
 } from '../hooks/useTests';
 import { extractErrorMessage } from '@/services/api';
 import type { Test, TestStatus, TestAssignmentTargetType } from '@placementos/types';
@@ -174,6 +175,7 @@ function TestRow({
             {t.track ? `${t.track} · ` : ''}{questionsLabel(t)} · {t.totalMarks} marks · {t.durationMinutes} min · violation limit {t.violationLimit}
           </p>
           {t.status === 'rejected' && t.reviewNote && <p className="text-xs text-red-600 mt-1">Rejected: {t.reviewNote}</p>}
+          <MediaToggles test={t} />
         </div>
         <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${STATUS_CLASSES[t.status]}`}>{STATUS_LABELS[t.status]}</span>
         <div className="flex items-center gap-2 shrink-0">
@@ -345,6 +347,29 @@ function AssignForm({ testId, onDone }: { testId: string; onDone: () => void }) 
           <Send className="w-3.5 h-3.5" /> Assign
         </button>
       </div>
+    </div>
+  );
+}
+
+/** Camera / screen-share on-off pills — changeable even after approval, for labs without webcams. */
+function MediaToggles({ test }: { test: Test }) {
+  const setMedia = useSetTestMediaRequirements();
+  const [error, setError] = useState('');
+  const toggle = async (payload: { requireCamera?: boolean; requireScreenShare?: boolean }) => {
+    setError('');
+    try { await setMedia.mutateAsync({ id: test._id, payload }); } catch (err) { setError((err as Error).message); }
+  };
+  const pill = (on: boolean) =>
+    `inline-flex items-center gap-1 h-6 px-2 rounded-md text-[11px] font-semibold border transition-colors disabled:opacity-50 ${on ? 'bg-violet-50 border-violet-200 text-violet-700 hover:bg-violet-100' : 'bg-white border-gray-200 text-gray-400 hover:bg-gray-50'}`;
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 mt-2">
+      <button type="button" disabled={setMedia.isPending} onClick={() => toggle({ requireCamera: !test.requireCamera })} className={pill(test.requireCamera)} title="Click to change">
+        <Camera className="w-3 h-3" /> Camera {test.requireCamera ? 'required' : 'off'}
+      </button>
+      <button type="button" disabled={setMedia.isPending} onClick={() => toggle({ requireScreenShare: !test.requireScreenShare })} className={pill(test.requireScreenShare)} title="Click to change">
+        <MonitorUp className="w-3 h-3" /> Screen share {test.requireScreenShare ? 'required' : 'off'}
+      </button>
+      {error && <span className="text-[11px] text-red-600">{error}</span>}
     </div>
   );
 }

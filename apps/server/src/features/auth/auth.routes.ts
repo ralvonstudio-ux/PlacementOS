@@ -1,15 +1,15 @@
 import { Router } from 'express';
 import { authController } from './auth.controller';
 import { authenticate } from '../../middlewares/authenticate';
-import { authLimiter, authAccountLimiter } from '../../middlewares/rateLimiter';
+import { authLimiter, authAccountLimiter, registerLimiter, refreshLimiter } from '../../middlewares/rateLimiter';
 import { env } from '../../config/env';
 
 const router = Router();
 
 // Public — rate limited.
-router.post('/register', authLimiter, authController.register);
+router.post('/register', registerLimiter, authController.register);
 router.post('/login', authLimiter, authAccountLimiter, authController.login);
-router.post('/refresh', authLimiter, authController.refresh);
+router.post('/refresh', refreshLimiter, authController.refresh);
 
 // Dev-only seed endpoint.
 if (env.NODE_ENV === 'development') {

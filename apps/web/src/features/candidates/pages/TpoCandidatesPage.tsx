@@ -1,11 +1,13 @@
 import { useState } from 'react';
-import { Users2, Plus, KeyRound, Trash2, Search } from 'lucide-react';
+import { Users2, Plus, KeyRound, Trash2, Search, RotateCcw, Users } from 'lucide-react';
 import { PageContainer } from '@/components/workspace/PageContainer';
 import { WorkspaceHeader } from '@/components/workspace/WorkspaceHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useCandidateList, useDeleteCandidate } from '../hooks/useCandidates';
 import { AddCandidateModal } from '../components/AddCandidateModal';
 import { CreateCandidateLoginModal } from '../components/CreateCandidateLoginModal';
+import { BulkLoginsModal } from '../components/BulkLoginsModal';
+import { ResetPasswordModal } from '../components/ResetPasswordModal';
 import type { Candidate } from '@placementos/types';
 
 const STATUS_CLASSES: Record<string, string> = {
@@ -20,6 +22,8 @@ export function TpoCandidatesPage() {
   const { mutate: deleteCandidate } = useDeleteCandidate();
   const [showAdd, setShowAdd] = useState(false);
   const [loginTarget, setLoginTarget] = useState<Candidate | null>(null);
+  const [resetTarget, setResetTarget] = useState<Candidate | null>(null);
+  const [showBulkLogins, setShowBulkLogins] = useState(false);
 
   const candidates = data?.data ?? [];
 
@@ -29,9 +33,14 @@ export function TpoCandidatesPage() {
         title="Students"
         subtitle="Roster, batch assignment, and portal logins"
         action={
-          <button onClick={() => setShowAdd(true)} className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-violet-600 hover:bg-violet-700 text-sm font-semibold text-white transition-colors">
-            <Plus className="w-4 h-4" /> Add Student
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button onClick={() => setShowBulkLogins(true)} className="inline-flex items-center gap-2 h-10 px-4 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-sm font-semibold text-gray-700 transition-colors">
+              <Users className="w-4 h-4" /> Create Logins in Bulk
+            </button>
+            <button onClick={() => setShowAdd(true)} className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-violet-600 hover:bg-violet-700 text-sm font-semibold text-white transition-colors">
+              <Plus className="w-4 h-4" /> Add Student
+            </button>
+          </div>
         }
       />
 
@@ -58,7 +67,12 @@ export function TpoCandidatesPage() {
                 </div>
                 <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${STATUS_CLASSES[c.status]}`}>{c.status}</span>
                 {c.loginEmail ? (
-                  <span className="text-[11px] text-gray-400 shrink-0">Login: {c.loginEmail}</span>
+                  <>
+                    <span className="text-[11px] text-gray-400 shrink-0 truncate max-w-[200px]" title={c.loginEmail}>Login: {c.loginUsername ?? c.loginEmail}</span>
+                    <button onClick={() => setResetTarget(c)} className="inline-flex items-center gap-1 text-xs font-medium text-gray-500 hover:text-violet-700 shrink-0" title="Reset password">
+                      <RotateCcw className="w-3.5 h-3.5" /> Reset
+                    </button>
+                  </>
                 ) : (
                   <button onClick={() => setLoginTarget(c)} className="inline-flex items-center gap-1.5 text-xs font-medium text-violet-600 hover:text-violet-700 shrink-0">
                     <KeyRound className="w-3.5 h-3.5" /> Create Login
@@ -75,6 +89,8 @@ export function TpoCandidatesPage() {
 
       {showAdd && <AddCandidateModal onClose={() => setShowAdd(false)} />}
       {loginTarget && <CreateCandidateLoginModal candidate={loginTarget} onClose={() => setLoginTarget(null)} />}
+      {resetTarget && <ResetPasswordModal candidate={resetTarget} onClose={() => setResetTarget(null)} />}
+      {showBulkLogins && <BulkLoginsModal missingCount={candidates.filter((c) => !c.loginEmail).length} onClose={() => setShowBulkLogins(false)} />}
     </PageContainer>
   );
 }

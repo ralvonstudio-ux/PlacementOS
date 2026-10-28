@@ -111,6 +111,7 @@ export const resetAuthRefreshState = () => {
 
 const clearAuthAndRedirect = () => {
   sessionStorage.removeItem('accessToken');
+  sessionStorage.removeItem('refreshToken');
   sessionStorage.removeItem('sessionId');
   clearProactiveRefresh();
   window.location.href = '/login';
@@ -130,29 +131,22 @@ const performRefresh = async (): Promise<string> => {
 
   try {
     const sessionId = sessionStorage.getItem('sessionId');
-    if (!sessionId) {
+    const refreshToken = sessionStorage.getItem('refreshToken');
+    if (!sessionId || !refreshToken) {
       // No session recorded for this tab (e.g. it was cleared, or this tab
-      // never completed a login) — nothing to refresh. Fail closed rather
-      // than hitting the endpoint with no way to identify which refresh
-      // cookie is ours.
+      // never completed a login) — nothing to refresh. Fail closed.
       throw new Error('No session to refresh');
     }
 
+    // The server's refresh endpoint takes the refresh token and its session id in the body
+    // (it sets no cookies), and rotates the refresh token on every call.
     const res = await axios.post<{
-      data: { accessToken: string };
-    }>(`${BASE_URL}/auth/refresh`, null, {
-      withCredentials: true,
-      headers: {
-        // Presence-only CSRF defense — see server/src/middlewares/csrf.ts.
-        'X-CSRF-Token': '1',
-        // Tells the server which of its refresh cookies is this tab's own —
-        // see the request interceptor above and auth-cookies.ts.
-        'X-Session-Id': sessionId,
-      },
-    });
+      data: { accessToken: string; refreshToken: string };
+    }>(`${BASE_URL}/auth/refresh`, { refreshToken, sessionId }, { timeout: 30_000 });
 
-    const { accessToken } = res.data.data;
+    const { accessToken, refreshToken: rotated } = res.data.data;
     sessionStorage.setItem('accessToken', accessToken);
+    if (rotated) sessionStorage.setItem('refreshToken', rotated);
     scheduleProactiveRefresh(accessToken);
 
     pendingRequests.forEach(({ resolve }) => resolve(accessToken));

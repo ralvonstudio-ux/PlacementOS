@@ -114,6 +114,8 @@ export function ManualTestBuilder({ basePath }: { basePath: string }) {
   const [durationMinutes, setDurationMinutes] = useState(60);
   const [violationLimit, setViolationLimit] = useState(3);
   const [allowedFullscreenExits, setAllowedFullscreenExits] = useState(1);
+  const [requireCamera, setRequireCamera] = useState(true);
+  const [requireScreenShare, setRequireScreenShare] = useState(true);
   const [sections, setSections] = useState<BuilderSection[]>([{ ...emptySection(1), title: 'Section A — MCQ' }]);
   // Keys are `${sectionIndex}:${questionIndex}` — which question cards are expanded.
   const [open, setOpen] = useState<Set<string>>(new Set());
@@ -175,6 +177,8 @@ export function ManualTestBuilder({ basePath }: { basePath: string }) {
     setDurationMinutes(t.durationMinutes);
     setViolationLimit(t.violationLimit);
     setAllowedFullscreenExits(t.allowedFullscreenExits ?? 1);
+    setRequireCamera(t.requireCamera ?? true);
+    setRequireScreenShare(t.requireScreenShare ?? true);
     const templateSections = t.sections?.length ? t.sections : [{ title: 'Questions' }];
     setSections(
       templateSections.map((s, si) => ({
@@ -226,6 +230,8 @@ export function ManualTestBuilder({ basePath }: { basePath: string }) {
         durationMinutes,
         violationLimit,
         allowedFullscreenExits,
+        requireCamera,
+        requireScreenShare,
       });
       navigate(`${basePath}/tests`);
     } catch (err) {
@@ -273,6 +279,16 @@ export function ManualTestBuilder({ basePath }: { basePath: string }) {
               <label className="block text-xs text-gray-500 mb-1">Fullscreen exits allowed (next one ends test)</label>
               <input type="number" min={0} max={10} value={allowedFullscreenExits} onChange={(e) => setAllowedFullscreenExits(Math.min(10, Math.max(0, Number(e.target.value))))} className={inputCls} />
             </div>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-x-6 gap-y-2 pt-1">
+            <label className="flex items-start gap-2 cursor-pointer">
+              <input type="checkbox" checked={requireCamera} onChange={(e) => setRequireCamera(e.target.checked)} className="mt-0.5 accent-violet-600" />
+              <span className="text-sm text-gray-700">Require camera<span className="block text-xs text-gray-400">Turn off for lab PCs without a webcam</span></span>
+            </label>
+            <label className="flex items-start gap-2 cursor-pointer">
+              <input type="checkbox" checked={requireScreenShare} onChange={(e) => setRequireScreenShare(e.target.checked)} className="mt-0.5 accent-violet-600" />
+              <span className="text-sm text-gray-700">Require entire-screen sharing<span className="block text-xs text-gray-400">Fullscreen, tab-switch and extension checks stay on either way</span></span>
+            </label>
           </div>
         </div>
 

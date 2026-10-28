@@ -1,5 +1,5 @@
 import { apiClient, extractErrorMessage } from '@/services/api';
-import type { ApiResponse, PaginatedResponse, Candidate, CreateCandidateLoginPayload } from '@placementos/types';
+import type { ApiResponse, PaginatedResponse, Candidate, CreateCandidateLoginPayload, BulkCreateLoginsPayload, BulkCreateLoginsResult, IssuedCredential } from '@placementos/types';
 
 const BASE = '/candidates';
 
@@ -77,6 +77,20 @@ export const candidatesApi = {
   async remove(id: string): Promise<void> {
     try {
       await apiClient.delete(`${BASE}/${id}`);
+    } catch (err) { throw new Error(extractErrorMessage(err)); }
+  },
+
+  async bulkCreateLogins(payload: BulkCreateLoginsPayload): Promise<BulkCreateLoginsResult> {
+    try {
+      const res = await apiClient.post<ApiResponse<BulkCreateLoginsResult>>(`${BASE}/logins/bulk`, payload, { timeout: 180_000 });
+      return res.data.data!;
+    } catch (err) { throw new Error(extractErrorMessage(err)); }
+  },
+
+  async resetPassword(id: string): Promise<IssuedCredential> {
+    try {
+      const res = await apiClient.post<ApiResponse<IssuedCredential>>(`${BASE}/${id}/reset-password`);
+      return res.data.data!;
     } catch (err) { throw new Error(extractErrorMessage(err)); }
   },
 

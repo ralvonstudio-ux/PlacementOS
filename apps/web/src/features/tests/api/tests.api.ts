@@ -87,6 +87,13 @@ export const testsApi = {
     } catch (err) { throw new Error(extractErrorMessage(err)); }
   },
 
+  async setMediaRequirements(id: string, payload: { requireCamera?: boolean; requireScreenShare?: boolean }): Promise<Test> {
+    try {
+      const res = await apiClient.patch<ApiResponse<Test>>(`${BASE}/${id}/media-requirements`, payload);
+      return res.data.data!;
+    } catch (err) { throw new Error(extractErrorMessage(err)); }
+  },
+
   async update(id: string, payload: Partial<CreateTestPayload>): Promise<Test> {
     try {
       const res = await apiClient.patch<ApiResponse<Test>>(`${BASE}/${id}`, payload);

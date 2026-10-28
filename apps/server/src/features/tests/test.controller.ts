@@ -139,6 +139,13 @@ export const testController = {
     } catch (err) { next(err); }
   },
 
+  async setMediaRequirements(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const ctx = ctxOf(req);
+      sendSuccess(res, await testService.setMediaRequirements(req.params.id, req.body, ctx), 'Proctoring settings updated');
+    } catch (err) { next(err); }
+  },
+
   async getResultAnalysis(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const ctx = ctxOf(req);
