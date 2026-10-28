@@ -22,6 +22,8 @@ export interface CreateCandidatePayload {
   phone?: string;
   placementYear: string;
   status?: Candidate['status'];
+  cgpa?: number;
+  activeBacklogs?: number;
 }
 
 export const candidatesApi = {

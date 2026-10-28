@@ -72,6 +72,9 @@ export interface Candidate {
   phone?: string;
   placementYear: string;
   status: 'active' | 'inactive' | 'placed';
+  /** Academic record used for placement-drive eligibility (set by TPO/admin or CSV import). */
+  cgpa?: number;
+  activeBacklogs?: number;
   /** Admin/TPO-issued login address — separate from `email`, mirrors Faculty.loginEmail. */
   loginEmail?: string;
   /** Username the student signs in with when their login was bulk-created (their roll number). */
@@ -1987,7 +1990,7 @@ export interface SendAccessCodePayload {
 
 // ── Notifications ────────────────────────────────────────────────────────────
 
-export type NotificationType = 'test_access_code' | 'staff_message';
+export type NotificationType = 'test_access_code' | 'staff_message' | 'placement_drive';
 export type NotificationRecipientRole = 'candidate' | 'faculty';
 /** 'high' forces the recipient to acknowledge it (a blurred, unskippable overlay +
  *  notification sound) before they can use their dashboard; 'normal' is a regular
@@ -2167,6 +2170,128 @@ export interface TrainerFeedbackOverviewItem {
   overallRating: number;
   avgByCriterion: TrainerFeedbackRatings;
 }
+// ── Placement drives ──────────────────────────────────────────────────────────
+
+export type DriveJobType = 'full_time' | 'internship' | 'internship_ppo';
+export type DriveStatus = 'draft' | 'open' | 'closed' | 'completed';
+export type DriveRoundType = 'aptitude' | 'technical' | 'coding' | 'group_discussion' | 'interview' | 'hr' | 'other';
+
+export interface DriveRound {
+  name: string;
+  type: DriveRoundType;
+  scheduledAt?: string;
+}
+
+/** Who may apply. Empty lists mean "no restriction" on that dimension. */
+export interface DriveEligibility {
+  minCgpa?: number;
+  maxBacklogs?: number;
+  departments: string[];
+  batches: string[];
+  placementYears: string[];
+  /** Students already holding a full-time/PPO offer can't apply (a "one student, one job" policy). */
+  excludePlaced: boolean;
+}
+
+export interface PlacementDrive {
+  _id: string;
+  companyName: string;
+  companyWebsite?: string;
+  roleTitle: string;
+  description?: string;
+  jobType: DriveJobType;
+  /** Annual CTC in lakhs (LPA) — full-time / PPO conversion. */
+  ctcLpa?: number;
+  /** Monthly stipend in rupees — internships. */
+  stipendPerMonth?: number;
+  location?: string;
+  eligibility: DriveEligibility;
+  rounds: DriveRound[];
+  applicationDeadline?: string;
+  driveDate?: string;
+  status: DriveStatus;
+  applicantCount: number;
+  selectedCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type CreatePlacementDrivePayload = Omit<PlacementDrive, '_id' | 'status' | 'applicantCount' | 'selectedCount' | 'createdAt' | 'updatedAt'>;
+
+/** applied → shortlisted (cleared ≥1 round) → selected, or rejected at any round; withdrawn by the student. */
+export type DriveApplicationStatus = 'applied' | 'shortlisted' | 'selected' | 'rejected' | 'withdrawn';
+export type DriveRoundResult = 'pending' | 'cleared' | 'rejected' | 'absent';
+
+export interface DriveRoundOutcome {
+  roundIndex: number;
+  result: DriveRoundResult;
+  updatedAt: string;
+}
+
+export interface DriveApplication {
+  _id: string;
+  driveId: string;
+  candidateId: string;
+  candidateName: string;
+  rollNumber: string;
+  department: string;
+  batch: string;
+  email?: string;
+  cgpa?: number;
+  activeBacklogs?: number;
+  status: DriveApplicationStatus;
+  roundResults: DriveRoundOutcome[];
+  offerCtcLpa?: number;
+  appliedAt: string;
+  updatedAt: string;
+}
+
+export interface PlacementDriveDetail {
+  drive: PlacementDrive;
+  applications: DriveApplication[];
+  /** Students who meet the criteria but haven't applied — the TPO's "chase these" number. */
+  eligibleNotApplied: number;
+}
+
+export interface DriveForCandidate extends PlacementDrive {
+  eligible: boolean;
+  ineligibleReasons: string[];
+  myApplication?: Pick<DriveApplication, '_id' | 'status' | 'roundResults' | 'offerCtcLpa' | 'appliedAt'>;
+}
+
+export interface SetDriveStatusPayload {
+  status: DriveStatus;
+}
+
+export interface RecordRoundResultPayload {
+  applicationIds: string[];
+  roundIndex: number;
+  result: DriveRoundResult;
+}
+
+export interface SetApplicationStatusPayload {
+  applicationIds: string[];
+  status: Exclude<DriveApplicationStatus, 'withdrawn'>;
+  /** Only with status 'selected' — defaults to the drive's CTC. */
+  offerCtcLpa?: number;
+}
+
+export interface PlacementStats {
+  placementYear?: string;
+  totalStudents: number;
+  placedStudents: number;
+  placementRate: number;
+  totalOffers: number;
+  internshipOffers: number;
+  highestCtcLpa: number;
+  averageCtcLpa: number;
+  medianCtcLpa: number;
+  activeDrives: number;
+  totalDrives: number;
+  byDepartment: { department: string; total: number; placed: number; rate: number }[];
+  byCompany: { companyName: string; roleTitle: string; offers: number; ctcLpa?: number; jobType: DriveJobType }[];
+}
+
 // ── Student logins (bulk creation / reset) ───────────────────────────────────
 
 /** Creates logins for every student without one — the given ids, or a whole batch, or everyone. */

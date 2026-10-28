@@ -1,5 +1,9 @@
 import { z } from 'zod';
 
+// CSV imports hand every cell over as a string, and a blank cell means "not provided".
+const optionalNumber = (schema: z.ZodNumber) =>
+  z.preprocess((v) => (v === '' || v === null || v === undefined ? undefined : Number(v)), schema.optional());
+
 export const createCandidateSchema = z.object({
   fullName: z.string().min(1).max(100).trim(),
   rollNumber: z.string().min(1).trim(),
@@ -9,6 +13,8 @@ export const createCandidateSchema = z.object({
   phone: z.string().optional(),
   placementYear: z.string().min(1).trim(),
   status: z.enum(['active', 'inactive', 'placed']).optional(),
+  cgpa: optionalNumber(z.number({ invalid_type_error: 'CGPA must be a number' }).min(0).max(10)),
+  activeBacklogs: optionalNumber(z.number({ invalid_type_error: 'Backlogs must be a number' }).int().min(0)),
 });
 
 export const updateCandidateSchema = createCandidateSchema.partial();

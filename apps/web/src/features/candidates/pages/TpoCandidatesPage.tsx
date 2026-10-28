@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Users2, Plus, KeyRound, Trash2, Search, RotateCcw, Users } from 'lucide-react';
+import { Users2, Plus, KeyRound, Trash2, Search, Pencil, RotateCcw, Users } from 'lucide-react';
 import { PageContainer } from '@/components/workspace/PageContainer';
 import { WorkspaceHeader } from '@/components/workspace/WorkspaceHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -22,6 +22,7 @@ export function TpoCandidatesPage() {
   const { mutate: deleteCandidate } = useDeleteCandidate();
   const [showAdd, setShowAdd] = useState(false);
   const [loginTarget, setLoginTarget] = useState<Candidate | null>(null);
+  const [editTarget, setEditTarget] = useState<Candidate | null>(null);
   const [resetTarget, setResetTarget] = useState<Candidate | null>(null);
   const [showBulkLogins, setShowBulkLogins] = useState(false);
 
@@ -63,7 +64,11 @@ export function TpoCandidatesPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-gray-900 truncate">{c.fullName}</p>
-                  <p className="text-xs text-gray-500">{c.rollNumber} · {c.batch} · {c.department}</p>
+                  <p className="text-xs text-gray-500">
+                    {c.rollNumber} · {c.batch} · {c.department}
+                    {c.cgpa !== undefined && c.cgpa !== null && <> · CGPA {c.cgpa}</>}
+                    {!!c.activeBacklogs && <span className="text-red-500"> · {c.activeBacklogs} backlog{c.activeBacklogs === 1 ? '' : 's'}</span>}
+                  </p>
                 </div>
                 <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${STATUS_CLASSES[c.status]}`}>{c.status}</span>
                 {c.loginEmail ? (
@@ -78,6 +83,9 @@ export function TpoCandidatesPage() {
                     <KeyRound className="w-3.5 h-3.5" /> Create Login
                   </button>
                 )}
+                <button onClick={() => setEditTarget(c)} className="p-1.5 rounded-lg text-gray-400 hover:text-violet-600 hover:bg-violet-50 transition-colors shrink-0" title="Edit">
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
                 <button onClick={() => deleteCandidate(c._id)} className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors shrink-0">
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
@@ -88,6 +96,7 @@ export function TpoCandidatesPage() {
       </div>
 
       {showAdd && <AddCandidateModal onClose={() => setShowAdd(false)} />}
+      {editTarget && <AddCandidateModal candidate={editTarget} onClose={() => setEditTarget(null)} />}
       {loginTarget && <CreateCandidateLoginModal candidate={loginTarget} onClose={() => setLoginTarget(null)} />}
       {resetTarget && <ResetPasswordModal candidate={resetTarget} onClose={() => setResetTarget(null)} />}
       {showBulkLogins && <BulkLoginsModal missingCount={candidates.filter((c) => !c.loginEmail).length} onClose={() => setShowBulkLogins(false)} />}

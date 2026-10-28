@@ -104,6 +104,8 @@ async function main() {
     loginEmail: 'candidate@demo.edu',
     placementYear: '2026',
     status: 'active',
+    cgpa: 8.4,
+    activeBacklogs: 0,
   });
 
   await User.create({
@@ -160,6 +162,60 @@ async function main() {
     status: 'active',
     createdBy: facultyUserId,
   });
+
+  // Placement drives: a few classmates with academic records, one open drive the demo candidate
+  // can apply to, and one finished drive with offers so the placement report has numbers.
+  const classmates = await Candidate.create([
+    { instituteId, fullName: 'Aarav Mehta', rollNumber: 'CSE-2026-002', batch: '2026-CSE', department: 'Computer Science', placementYear: '2026', status: 'active', cgpa: 9.1, activeBacklogs: 0 },
+    { instituteId, fullName: 'Isha Rao', rollNumber: 'CSE-2026-003', batch: '2026-CSE', department: 'Computer Science', placementYear: '2026', status: 'active', cgpa: 7.2, activeBacklogs: 1 },
+    { instituteId, fullName: 'Kabir Singh', rollNumber: 'ECE-2026-001', batch: '2026-ECE', department: 'Electronics', placementYear: '2026', status: 'active', cgpa: 7.9, activeBacklogs: 0 },
+    { instituteId, fullName: 'Neha Verma', rollNumber: 'ECE-2026-002', batch: '2026-ECE', department: 'Electronics', placementYear: '2026', status: 'active', cgpa: 6.4, activeBacklogs: 2 },
+  ]);
+  const { PlacementDrive, DriveApplication } = await import('../features/placement-drives/placement-drive.model');
+  const tpoUserId = String((await User.findOne({ email: 'tpo@demo.edu' }))!._id);
+  const day = 24 * 60 * 60 * 1000;
+  await PlacementDrive.create({
+    instituteId,
+    companyName: 'Infosys',
+    roleTitle: 'Systems Engineer',
+    description: 'Campus hiring for the Systems Engineer role. Training at Mysuru campus followed by project allocation.',
+    jobType: 'full_time',
+    ctcLpa: 3.6,
+    location: 'Pan India',
+    eligibility: { minCgpa: 6, maxBacklogs: 0, departments: ['Computer Science', 'Electronics'], batches: [], placementYears: ['2026'], excludePlaced: true },
+    rounds: [
+      { name: 'Online Assessment', type: 'aptitude', scheduledAt: new Date(Date.now() + 7 * day) },
+      { name: 'Technical Interview', type: 'interview', scheduledAt: new Date(Date.now() + 9 * day) },
+      { name: 'HR Interview', type: 'hr', scheduledAt: new Date(Date.now() + 9 * day) },
+    ],
+    applicationDeadline: new Date(Date.now() + 5 * day),
+    driveDate: new Date(Date.now() + 7 * day),
+    status: 'open',
+    announcedAt: new Date(),
+    createdBy: tpoUserId,
+  });
+  const tcs = await PlacementDrive.create({
+    instituteId,
+    companyName: 'TCS',
+    roleTitle: 'Digital Engineer',
+    jobType: 'full_time',
+    ctcLpa: 7,
+    location: 'Bengaluru',
+    eligibility: { minCgpa: 7, maxBacklogs: 0, departments: [], batches: [], placementYears: ['2026'], excludePlaced: true },
+    rounds: [
+      { name: 'NQT', type: 'aptitude' },
+      { name: 'Technical + HR', type: 'interview' },
+    ],
+    status: 'completed',
+    announcedAt: new Date(Date.now() - 30 * day),
+    createdBy: tpoUserId,
+  });
+  const cleared = (n: number) => Array.from({ length: n }, (_, roundIndex) => ({ roundIndex, result: 'cleared', updatedAt: new Date() }));
+  await DriveApplication.create([
+    { instituteId, driveId: String(tcs._id), candidateId: String(classmates[0]._id), status: 'selected', roundResults: cleared(2), offerCtcLpa: 7, appliedAt: new Date(Date.now() - 25 * day) },
+    { instituteId, driveId: String(tcs._id), candidateId: String(classmates[2]._id), status: 'rejected', roundResults: [...cleared(1), { roundIndex: 1, result: 'rejected', updatedAt: new Date() }], appliedAt: new Date(Date.now() - 25 * day) },
+  ]);
+  await Candidate.updateOne({ _id: classmates[0]._id }, { $set: { status: 'placed' } });
 
   // eslint-disable-next-line no-console
   console.log('[demo] seeded institute + 4 logins (admin/tpo/faculty/candidate), password for all: ' + DEMO_PASSWORD);

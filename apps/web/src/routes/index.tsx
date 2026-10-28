@@ -63,6 +63,8 @@ const TestBuilderPage = lazyWithReload(() => import('@/features/tests/pages/Test
 const TestReviewPage = lazyWithReload(() => import('@/features/tests/pages/TestReviewPage').then((m) => ({ default: m.TestReviewPage })), 'TestReviewPage');
 const TestMonitorPage = lazyWithReload(() => import('@/features/tests/pages/TestMonitorPage').then((m) => ({ default: m.TestMonitorPage })), 'TestMonitorPage');
 const TestResultAnalysisPage = lazyWithReload(() => import('@/features/tests/pages/TestResultAnalysisPage').then((m) => ({ default: m.TestResultAnalysisPage })), 'TestResultAnalysisPage');
+const TpoPlacementDrivesPage = lazyWithReload(() => import('@/features/placement-drives/pages/TpoPlacementDrivesPage').then((m) => ({ default: m.TpoPlacementDrivesPage })), 'TpoPlacementDrivesPage');
+const TpoDriveDetailPage = lazyWithReload(() => import('@/features/placement-drives/pages/TpoDriveDetailPage').then((m) => ({ default: m.TpoDriveDetailPage })), 'TpoDriveDetailPage');
 const TpoTrainerFeedbackPage = lazyWithReload(() => import('@/features/trainer-feedback/pages/TpoTrainerFeedbackPage').then((m) => ({ default: m.TpoTrainerFeedbackPage })), 'TpoTrainerFeedbackPage');
 
 // ── Candidate pages ──────────────────────────────────────────────────────────
@@ -74,6 +76,7 @@ const CandidateWorksheetsPage = lazyWithReload(() => import('@/features/workshee
 const TestListPage = lazyWithReload(() => import('@/features/tests/pages/TestListPage').then((m) => ({ default: m.TestListPage })), 'TestListPage');
 const MyTestResultPage = lazyWithReload(() => import('@/features/tests/pages/MyTestResultPage').then((m) => ({ default: m.MyTestResultPage })), 'MyTestResultPage');
 const TestTakingPage = lazyWithReload(() => import('@/features/tests/pages/TestTakingPage').then((m) => ({ default: m.TestTakingPage })), 'TestTakingPage');
+const CandidateDrivesPage = lazyWithReload(() => import('@/features/placement-drives/pages/CandidateDrivesPage').then((m) => ({ default: m.CandidateDrivesPage })), 'CandidateDrivesPage');
 const CandidateTrainerFeedbackPage = lazyWithReload(() => import('@/features/trainer-feedback/pages/CandidateTrainerFeedbackPage').then((m) => ({ default: m.CandidateTrainerFeedbackPage })), 'CandidateTrainerFeedbackPage');
 
 // ── Shared ─────────────────────────────────────────────────────────────────
@@ -176,6 +179,8 @@ export const router = createBrowserRouter([
                   { path: 'tests/:id/attempts/:attemptId/analysis', element: <TestResultAnalysisPage /> },
                   { path: 'tests/:id/monitor', element: <TestMonitorPage /> },
                   { path: 'trainer-feedback', element: <TpoTrainerFeedbackPage /> },
+                  { path: 'placements', element: <TpoPlacementDrivesPage /> },
+                  { path: 'placements/:id', element: <TpoDriveDetailPage /> },
                 ],
               },
 
@@ -191,6 +196,7 @@ export const router = createBrowserRouter([
                   { path: 'worksheets', element: <CandidateWorksheetsPage /> },
                   { path: 'tests', element: <TestListPage /> },
                   { path: 'tests/:assignmentId/result', element: <MyTestResultPage /> },
+                  { path: 'placements', element: <CandidateDrivesPage /> },
                   { path: 'trainer-feedback', element: <CandidateTrainerFeedbackPage /> },
                 ],
               },

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
-import { KeyRound, MessageSquare, Send, Loader2, CheckCircle2, Inbox, CheckCheck, X, AlertTriangle, Users, GraduationCap } from 'lucide-react';
+import { KeyRound, MessageSquare, Send, Loader2, CheckCircle2, Inbox, CheckCheck, X, AlertTriangle, Users, GraduationCap, Briefcase } from 'lucide-react';
 import { PageContainer } from '@/components/workspace/PageContainer';
 import { WorkspaceHeader } from '@/components/workspace/WorkspaceHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -24,6 +24,7 @@ import type { NotificationType } from '@placementos/types';
 const NOTIFICATION_ICON: Record<NotificationType, typeof KeyRound> = {
   test_access_code: KeyRound,
   staff_message: MessageSquare,
+  placement_drive: Briefcase,
 };
 
 const AUDIENCE_OPTIONS: { value: 'students' | 'faculty' | 'both'; label: string; icon: typeof GraduationCap }[] = [
