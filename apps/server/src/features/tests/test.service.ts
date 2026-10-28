@@ -14,6 +14,7 @@ import {
   runCodeSchema,
   submitCodeSchema,
   markViewedSchema,
+  mediaRequirementsSchema,
 } from './test.validation';
 import { ITest, ITestAttempt, ITestAssignment, ITestQuestionSnapshot, ITestSection, CodingLanguage, ITestQuestionResult, QuestionResultStatus, ITestAttemptEvent, TestAttemptEventType } from './test.model';
 import { SAMPLE_TEST_TEMPLATE } from './sample-test.template';
@@ -69,6 +70,9 @@ const toTestApiShape = (t: ITest): TestApiShape => ({
   durationMinutes: t.durationMinutes,
   violationLimit: t.violationLimit,
   allowedFullscreenExits: t.allowedFullscreenExits ?? 1,
+  // Tests created before these settings existed always required both.
+  requireCamera: t.requireCamera ?? true,
+  requireScreenShare: t.requireScreenShare ?? true,
   status: t.status,
   contentName: t.contentName,
   topic: t.topic,
@@ -382,6 +386,8 @@ export const testService = {
       durationMinutes: input.durationMinutes,
       violationLimit: input.violationLimit,
       allowedFullscreenExits: 1,
+      requireCamera: true,
+      requireScreenShare: true,
       contentName: input.contentName,
       topic: input.topic,
       sourceContent: input.sourceContent,
@@ -402,6 +408,17 @@ export const testService = {
     // Editing a rejected test moves it back to draft — it needs to be resubmitted.
     const patch = existing.status === 'rejected' ? { ...data, status: 'draft' as const } : data;
     const updated = await testRepository.update(id, ctx.instituteId, patch);
+    if (!updated) throw new NotFoundError('Test');
+    return toTestApiShape(updated);
+  },
+
+  /** Turns the camera / screen-share requirement on or off, whatever the test's status — a lab
+   *  without webcams is usually discovered after the paper is approved. */
+  async setMediaRequirements(id: string, rawInput: unknown, ctx: AuthContext): Promise<TestApiShape> {
+    const data = mediaRequirementsSchema.parse(rawInput);
+    const existing = await testRepository.findById(id, ctx.instituteId);
+    if (!existing) throw new NotFoundError('Test');
+    const updated = await testRepository.update(id, ctx.instituteId, data as never);
     if (!updated) throw new NotFoundError('Test');
     return toTestApiShape(updated);
   },
@@ -800,6 +817,8 @@ export const testService = {
         totalMarks: test.totalMarks,
         durationMinutes: test.durationMinutes,
         violationLimit: test.violationLimit,
+        requireCamera: test.requireCamera ?? true,
+        requireScreenShare: test.requireScreenShare ?? true,
         questionCount: paperQuestionCount(test.questions, test.sections),
         scheduledAt: a.scheduledAt ? new Date(a.scheduledAt).toISOString() : undefined,
         codeIssued: !!a.accessCodeIssuedAt,
@@ -915,6 +934,8 @@ export const testService = {
       durationMinutes: test.durationMinutes,
       violationLimit: test.violationLimit,
       allowedFullscreenExits: test.allowedFullscreenExits ?? 1,
+      requireCamera: test.requireCamera ?? true,
+      requireScreenShare: test.requireScreenShare ?? true,
       fullscreenExitsUsed: attempt.violations.filter((v) => v.type === 'fullscreen_exit').length,
       serverTime: new Date().toISOString(),
     };

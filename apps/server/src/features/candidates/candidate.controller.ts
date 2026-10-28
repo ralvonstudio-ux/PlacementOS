@@ -73,6 +73,26 @@ export const candidateController = {
     }
   },
 
+  async bulkCreateLogins(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const ctx = buildAuthContext(req.user!, req.ip ?? undefined);
+      const result = await candidateService.bulkCreateLogins(req.body, ctx);
+      sendCreated(res, result, `${result.created.length} login(s) created`);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async resetLoginPassword(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const ctx = buildAuthContext(req.user!, req.ip ?? undefined);
+      const result = await candidateService.resetLoginPassword(req.params.id, ctx);
+      sendSuccess(res, result, 'Password reset');
+    } catch (err) {
+      next(err);
+    }
+  },
+
   async createLogin(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const ctx = buildAuthContext(req.user!, req.ip ?? undefined);

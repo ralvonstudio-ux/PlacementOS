@@ -180,6 +180,9 @@ export function TestTakingPage() {
   const navigate = useNavigate();
   const { data: myTests } = useMyTests();
   const listing = myTests?.find((t) => t._id === assignmentId);
+  // Until the listing loads, assume the strictest setup rather than briefly offering less.
+  const needsCamera = listing?.requireCamera ?? true;
+  const needsScreenShare = listing?.requireScreenShare ?? true;
 
   const [phase, setPhase] = useState<Phase>('instructions');
   const [session, setSession] = useState<StartTestAttemptResult | null>(null);
@@ -509,11 +512,11 @@ export function TestTakingPage() {
       setError('Fix the system check problems before starting.');
       return;
     }
-    if (!cameraReady || !streamRef.current) {
+    if (needsCamera && (!cameraReady || !streamRef.current)) {
       setCameraError('Enable your camera first.');
       return;
     }
-    if (!screenReady || !screenStreamRef.current) {
+    if (needsScreenShare && (!screenReady || !screenStreamRef.current)) {
       setScreenShareError('Share your entire screen first.');
       return;
     }
@@ -744,7 +747,9 @@ export function TestTakingPage() {
 
   if (phase === 'instructions') {
     const testInstructions = listing?.instructions?.split('\n').map((l) => l.trim()).filter(Boolean) ?? [];
-    const setupDone = cameraReady && screenReady && isFullscreen;
+    const setupDone = (!needsCamera || cameraReady) && (!needsScreenShare || screenReady) && isFullscreen;
+    const steps = [needsCamera && 'camera', needsScreenShare && 'screen', 'fullscreen'].filter(Boolean) as string[];
+    const stepNo = (s: string) => steps.indexOf(s) + 1;
     const canStart = setupDone && agreed && !!accessCode.trim() && envProblems.length === 0 && !startTest.isPending;
     return (
       <div className="min-h-screen bg-gray-50 flex flex-col">
@@ -796,7 +801,9 @@ export function TestTakingPage() {
                 {[
                   'Switching tabs or windows is logged',
                   'Copy, paste, right-click and screenshots are blocked and logged',
-                  'Your camera must stay on, and your ENTIRE screen stay shared, for the full test',
+                  ...(needsCamera || needsScreenShare
+                    ? [`Your ${[needsCamera && 'camera must stay on', needsScreenShare && 'ENTIRE screen must stay shared'].filter(Boolean).join(', and your ')} for the full test`]
+                    : []),
                   'No browser extensions or second screens — detecting one ends your test immediately',
                   'Leaving fullscreen pauses the test; leaving it again ends your test',
                   'The test can only be open in one window/device at a time, and your IP address is logged',
@@ -837,12 +844,12 @@ export function TestTakingPage() {
             </div>
 
             <div className="space-y-2.5">
-              <SetupStep n={1} icon={Camera} title="Camera" done={cameraReady} busy={enabling === 'camera'} actionLabel={cameraReady ? 'Re-enable' : 'Enable Camera'} onAction={enableCamera} error={cameraError} />
-              {cameraReady && (
+              {needsCamera && <SetupStep n={stepNo('camera')} icon={Camera} title="Camera" done={cameraReady} busy={enabling === 'camera'} actionLabel={cameraReady ? 'Re-enable' : 'Enable Camera'} onAction={enableCamera} error={cameraError} />}
+              {needsCamera && cameraReady && (
                 <video ref={previewVideoRef} autoPlay muted playsInline className="w-full aspect-video rounded-xl bg-black object-cover border border-gray-200" />
               )}
-              <SetupStep n={2} icon={MonitorUp} title="Screen share (entire screen)" done={screenReady} busy={enabling === 'screen'} actionLabel={screenReady ? 'Re-share' : 'Share Screen'} onAction={enableScreenShare} error={screenShareError} />
-              <SetupStep n={3} icon={Maximize} title="Fullscreen" done={isFullscreen} busy={enabling === 'fullscreen'} actionLabel="Enter Fullscreen" onAction={enableFullscreen} hideActionWhenDone />
+              {needsScreenShare && <SetupStep n={stepNo('screen')} icon={MonitorUp} title="Screen share (entire screen)" done={screenReady} busy={enabling === 'screen'} actionLabel={screenReady ? 'Re-share' : 'Share Screen'} onAction={enableScreenShare} error={screenShareError} />}
+              <SetupStep n={stepNo('fullscreen')} icon={Maximize} title="Fullscreen" done={isFullscreen} busy={enabling === 'fullscreen'} actionLabel="Enter Fullscreen" onAction={enableFullscreen} hideActionWhenDone />
             </div>
 
             <div>
@@ -876,7 +883,7 @@ export function TestTakingPage() {
               {startTest.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
               Start Test
             </button>
-            {!setupDone && <p className="text-xs text-center text-gray-400">Finish steps 1–3 to unlock Start Test.</p>}
+            {!setupDone && <p className="text-xs text-center text-gray-400">Finish {steps.length === 1 ? 'the step above' : `steps 1–${steps.length}`} to unlock Start Test.</p>}
           </aside>
         </div>
       </div>
@@ -933,7 +940,7 @@ export function TestTakingPage() {
           {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
         </div>
         <div className="flex items-center gap-3">
-          <video ref={videoRef} autoPlay muted playsInline className="w-14 h-10 rounded-lg border border-gray-200 object-cover bg-black" />
+          {session?.requireCamera !== false && <video ref={videoRef} autoPlay muted playsInline className="w-14 h-10 rounded-lg border border-gray-200 object-cover bg-black" />}
           <button
             onClick={() => handleFinalSubmit(false)}
             disabled={submitTestMutation.isPending || fullscreenLost}
@@ -1115,9 +1122,11 @@ export function TestTakingPage() {
       </div>
 
       <footer className="px-6 py-2 bg-white border-t border-gray-100 flex items-center gap-2 text-xs text-gray-400">
-        <Camera className="w-3.5 h-3.5" />
-        <MonitorUp className="w-3.5 h-3.5" />
-        Camera &amp; screen share active · Fullscreen enforced · Copy/paste blocked · Extensions monitored · All activity is logged
+        {session?.requireCamera !== false && <Camera className="w-3.5 h-3.5" />}
+        {session?.requireScreenShare !== false && <MonitorUp className="w-3.5 h-3.5" />}
+        {[session?.requireCamera !== false && 'Camera', session?.requireScreenShare !== false && 'screen share'].filter(Boolean).join(' & ').replace(/^s/, 'S')}
+        {(session?.requireCamera !== false || session?.requireScreenShare !== false) && ' active · '}
+        Fullscreen enforced · Copy/paste blocked · Extensions monitored · All activity is logged
       </footer>
     </div>
   );

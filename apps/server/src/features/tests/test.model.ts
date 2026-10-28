@@ -54,6 +54,10 @@ export interface ITest extends Document {
   violationLimit: number;
   /** Fullscreen exits tolerated (test pauses until restored); the next exit ends the attempt. */
   allowedFullscreenExits: number;
+  /** Whether the candidate must keep a camera on / share their entire screen. Lab PCs often
+   *  have no webcam, so either can be turned off per test. */
+  requireCamera: boolean;
+  requireScreenShare: boolean;
   status: TestStatus;
   /** The faculty-given label for the uploaded/pasted source material, and the topic
    *  it covers — both optional, only meaningful when the test was AI-drafted. */
@@ -121,6 +125,8 @@ const testSchema = new Schema<ITest>(
     durationMinutes: { type: Number, required: true, min: 1 },
     violationLimit: { type: Number, required: true, min: 1, default: 3 },
     allowedFullscreenExits: { type: Number, min: 0, default: 1 },
+    requireCamera: { type: Boolean, default: true },
+    requireScreenShare: { type: Boolean, default: true },
     status: { type: String, enum: ['draft', 'pending_approval', 'approved', 'rejected'], default: 'draft' },
     contentName: { type: String, trim: true },
     topic: { type: String, trim: true },

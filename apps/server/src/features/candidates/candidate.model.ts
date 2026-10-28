@@ -17,6 +17,8 @@ export interface ICandidate extends Document {
   activeBacklogs?: number;
   /** Admin/TPO-issued login address — separate from `email`, mirrors Faculty.loginEmail. */
   loginEmail?: string;
+  /** Username for logins created in bulk (the roll number), so students sign in without an email. */
+  loginUsername?: string;
   /** Free-text note a faculty member can attach from the batch roster (attendance
    *  edit flow) — never shown on the attendance-marking screen itself, only on the
    *  roster's edit view. Distinct from admin/TPO's full-record edit permissions. */
@@ -46,6 +48,7 @@ const candidateSchema = new Schema<ICandidate>(
     cgpa: { type: Number, min: 0, max: 10 },
     activeBacklogs: { type: Number, min: 0 },
     loginEmail: { type: String, trim: true, lowercase: true },
+    loginUsername: { type: String, trim: true, lowercase: true },
     facultyNote: { type: String, trim: true, maxlength: 2000 },
     isDeleted: { type: Boolean, default: false },
     deletedAt: { type: Date },

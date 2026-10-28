@@ -77,6 +77,8 @@ export interface Candidate {
   activeBacklogs?: number;
   /** Admin/TPO-issued login address — separate from `email`, mirrors Faculty.loginEmail. */
   loginEmail?: string;
+  /** Username the student signs in with when their login was bulk-created (their roll number). */
+  loginUsername?: string;
   /** Faculty-attached note, editable from the batch roster's edit view only —
    *  never shown on the attendance-marking screen itself. */
   facultyNote?: string;
@@ -410,6 +412,8 @@ export interface LoginPayload {
 
 export interface LoginResponse {
   accessToken: string;
+  /** Long-lived token the client trades (with sessionId) for a fresh access token. */
+  refreshToken: string;
   sessionId: string;
   user: AuthUser;
   mustResetPassword?: boolean;
@@ -1519,6 +1523,10 @@ export interface Test {
   /** Fullscreen exits tolerated (the test pauses until fullscreen is restored); the next exit
    *  ends the attempt. */
   allowedFullscreenExits: number;
+  /** Whether the candidate must keep a camera on / share their entire screen. Lab PCs often
+   *  have no webcam, so either can be turned off per test. */
+  requireCamera: boolean;
+  requireScreenShare: boolean;
   status: TestStatus;
   /** Set only when the test was AI-drafted from uploaded/pasted content. */
   contentName?: string;
@@ -1543,6 +1551,8 @@ export interface CreateTestPayload {
   durationMinutes: number;
   violationLimit: number;
   allowedFullscreenExits?: number;
+  requireCamera?: boolean;
+  requireScreenShare?: boolean;
 }
 
 export interface GenerateTestDraftPayload {
@@ -1612,6 +1622,8 @@ export interface TestForCandidate {
   totalMarks: number;
   durationMinutes: number;
   violationLimit: number;
+  requireCamera: boolean;
+  requireScreenShare: boolean;
   questionCount: number;
   scheduledAt?: string;
   /** Whether staff have sent out an access code yet — the test can't be started until they do,
@@ -1800,6 +1812,8 @@ export interface StartTestAttemptResult {
   durationMinutes: number;
   violationLimit: number;
   allowedFullscreenExits: number;
+  requireCamera: boolean;
+  requireScreenShare: boolean;
   /** Fullscreen exits already used on this attempt (survives a resume). */
   fullscreenExitsUsed: number;
   serverTime: string;
@@ -2156,7 +2170,6 @@ export interface TrainerFeedbackOverviewItem {
   overallRating: number;
   avgByCriterion: TrainerFeedbackRatings;
 }
-
 // ── Placement drives ──────────────────────────────────────────────────────────
 
 export type DriveJobType = 'full_time' | 'internship' | 'internship_ppo';
@@ -2277,4 +2290,28 @@ export interface PlacementStats {
   totalDrives: number;
   byDepartment: { department: string; total: number; placed: number; rate: number }[];
   byCompany: { companyName: string; roleTitle: string; offers: number; ctcLpa?: number; jobType: DriveJobType }[];
+}
+
+// ── Student logins (bulk creation / reset) ───────────────────────────────────
+
+/** Creates logins for every student without one — the given ids, or a whole batch, or everyone. */
+export interface BulkCreateLoginsPayload {
+  candidateIds?: string[];
+  batch?: string;
+}
+
+/** A freshly issued credential — the plain password exists only in this response. */
+export interface IssuedCredential {
+  candidateId: string;
+  fullName: string;
+  rollNumber: string;
+  batch: string;
+  /** What the student types in the login box (roll number, or email for older logins). */
+  loginId: string;
+  password: string;
+}
+
+export interface BulkCreateLoginsResult {
+  created: IssuedCredential[];
+  skipped: { fullName: string; rollNumber: string; reason: string }[];
 }

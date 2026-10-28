@@ -31,6 +31,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       .then((data) => setUser(data))
       .catch(() => {
         sessionStorage.removeItem('accessToken');
+        sessionStorage.removeItem('refreshToken');
         sessionStorage.removeItem('sessionId');
       })
       .finally(() => setIsLoading(false));
@@ -40,6 +41,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     const data = await authApi.login({ identifier, password });
     queryClient.clear();
     sessionStorage.setItem('accessToken', data.accessToken);
+    sessionStorage.setItem('refreshToken', data.refreshToken);
     sessionStorage.setItem('sessionId', data.sessionId);
     scheduleProactiveRefresh(data.accessToken);
     const mergedUser: AuthUser = {
@@ -59,6 +61,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const logout = useCallback(async (): Promise<void> => {
     await authApi.logout();
     sessionStorage.removeItem('accessToken');
+    sessionStorage.removeItem('refreshToken');
     sessionStorage.removeItem('sessionId');
     resetAuthRefreshState();
     queryClient.clear();

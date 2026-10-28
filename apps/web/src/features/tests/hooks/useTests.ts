@@ -52,6 +52,14 @@ export const useUpdateTest = () => {
   });
 };
 
+export const useSetTestMediaRequirements = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: { requireCamera?: boolean; requireScreenShare?: boolean } }) => testsApi.setMediaRequirements(id, payload),
+    onSuccess: () => qc.invalidateQueries({ queryKey: testKeys.list() }),
+  });
+};
+
 export const useSubmitTestForApproval = () => {
   const qc = useQueryClient();
   return useMutation({

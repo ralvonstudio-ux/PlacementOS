@@ -53,6 +53,8 @@ export const SAMPLE_TEST_TEMPLATE: CreateTestInput = {
   durationMinutes: 90,
   violationLimit: 3,
   allowedFullscreenExits: 1,
+  requireCamera: true,
+  requireScreenShare: true,
   questions: [
     mcq('What is the worst-case time complexity of binary search on a sorted array of n elements?', ['O(1)', 'O(log n)', 'O(n)', 'O(n log n)'], 'O(log n)'),
     mcq('Which data structure follows the Last-In-First-Out (LIFO) principle?', ['Queue', 'Stack', 'Linked List', 'Heap'], 'Stack'),

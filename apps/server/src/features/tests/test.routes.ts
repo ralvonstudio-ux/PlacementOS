@@ -35,6 +35,7 @@ router.get('/', authorize('admin', 'tpo', 'faculty'), testController.list);
 router.post('/', authorize('admin', 'tpo', 'faculty'), testController.create);
 router.post('/generate-draft', authorize('admin', 'tpo', 'faculty'), testController.generateDraft);
 router.patch('/:id', authorize('admin', 'tpo', 'faculty'), testController.update);
+router.patch('/:id/media-requirements', authorize('admin', 'tpo', 'faculty'), testController.setMediaRequirements);
 router.patch('/:id/submit-for-approval', authorize('admin', 'tpo', 'faculty'), testController.submitForApproval);
 router.patch('/:id/review', authorize('admin', 'tpo'), testController.review);
 router.post('/:id/assignments', authorize('admin', 'tpo', 'faculty'), testController.createAssignment);

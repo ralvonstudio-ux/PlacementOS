@@ -30,6 +30,11 @@ export const createLoginSchema = z.object({
   password: z.string().min(8, 'Password must be at least 8 characters'),
 });
 
+export const bulkCreateLoginsSchema = z.object({
+  candidateIds: z.array(z.string().min(1)).max(500).optional(),
+  batch: z.string().trim().min(1).optional(),
+});
+
 export const listCandidateSchema = z.object({
   page: z.coerce.number().int().min(1).optional(),
   limit: z.coerce.number().int().min(1).max(200).optional(),

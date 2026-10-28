@@ -57,6 +57,8 @@ const testBodySchema = z.object({
   durationMinutes: z.number().int().min(1),
   violationLimit: z.number().int().min(1).default(3),
   allowedFullscreenExits: z.number().int().min(0).max(10).default(1),
+  requireCamera: z.boolean().default(true),
+  requireScreenShare: z.boolean().default(true),
   contentName: z.string().trim().optional(),
   topic: z.string().trim().optional(),
   sourceContent: z.string().optional(),
@@ -168,6 +170,12 @@ export const logViolationSchema = z.object({
   ]),
   detail: z.string().trim().max(300).optional(),
 });
+
+/** Camera / screen-share requirements — the one thing still changeable on an approved test,
+ *  since they depend on the lab's hardware, not the paper. */
+export const mediaRequirementsSchema = z
+  .object({ requireCamera: z.boolean().optional(), requireScreenShare: z.boolean().optional() })
+  .refine((v) => v.requireCamera !== undefined || v.requireScreenShare !== undefined, 'Nothing to change');
 
 export type CreateTestInput = z.infer<typeof createTestSchema>;
 export type UpdateTestInput = z.infer<typeof updateTestSchema>;
