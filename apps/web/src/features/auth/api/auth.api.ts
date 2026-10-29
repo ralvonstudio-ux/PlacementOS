@@ -2,6 +2,23 @@ import { apiClient, extractErrorMessage, ApiError } from '@/services/api';
 import type { ApiResponse, LoginPayload, LoginResponse, AuthUser, ChangePasswordPayload, UpdateMePayload } from '@placementos/types';
 
 export const authApi = {
+  /** Emails a 6-digit reset code; resolves the same whether or not the account exists. */
+  async forgotPassword(identifier: string): Promise<void> {
+    try {
+      await apiClient.post('/auth/forgot-password', { identifier });
+    } catch (err) {
+      throw new Error(extractErrorMessage(err));
+    }
+  },
+
+  async resetPassword(payload: { identifier: string; code: string; newPassword: string }): Promise<void> {
+    try {
+      await apiClient.post('/auth/reset-password', payload);
+    } catch (err) {
+      throw new Error(extractErrorMessage(err));
+    }
+  },
+
   async login(payload: LoginPayload): Promise<LoginResponse> {
     try {
       const res = await apiClient.post<ApiResponse<LoginResponse>>('/auth/login', payload);

@@ -2298,6 +2298,13 @@ export interface PlacementStats {
 export interface BulkCreateLoginsPayload {
   candidateIds?: string[];
   batch?: string;
+  /** Email each student their login ID and password (students with an email on record). */
+  emailCredentials?: boolean;
+}
+
+export interface ResetLoginPasswordPayload {
+  /** Email the new password to the student instead of (or as well as) showing it here. */
+  emailCredentials?: boolean;
 }
 
 /** A freshly issued credential — the plain password exists only in this response. */
@@ -2309,6 +2316,10 @@ export interface IssuedCredential {
   /** What the student types in the login box (roll number, or email for older logins). */
   loginId: string;
   password: string;
+  /** Set when the credentials were emailed — the address they went to. */
+  emailedTo?: string;
+  /** Set when emailing was asked for but didn't happen, e.g. "No email on record". */
+  emailError?: string;
 }
 
 export interface BulkCreateLoginsResult {

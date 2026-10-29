@@ -10,6 +10,9 @@ const router = Router();
 router.post('/register', registerLimiter, authController.register);
 router.post('/login', authLimiter, authAccountLimiter, authController.login);
 router.post('/refresh', refreshLimiter, authController.refresh);
+// Forgot password — the per-account limiter keys on `identifier`, capping codes and guesses per account.
+router.post('/forgot-password', authLimiter, authAccountLimiter, authController.forgotPassword);
+router.post('/reset-password', authLimiter, authAccountLimiter, authController.resetPassword);
 
 // Dev-only seed endpoint.
 if (env.NODE_ENV === 'development') {

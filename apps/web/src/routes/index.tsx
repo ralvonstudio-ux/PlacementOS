@@ -5,6 +5,7 @@ import { AppLayout } from '@/layouts/AppLayout';
 import { AuthProvider } from '@/features/auth/components/AuthProvider';
 import { ProtectedRoute } from '@/features/auth/components/ProtectedRoute';
 import { LoginPage } from '@/features/auth/pages/LoginPage';
+import { ForgotPasswordPage } from '@/features/auth/pages/ForgotPasswordPage';
 import { NotFound } from '@/pages/NotFound';
 import { Forbidden } from '@/pages/Forbidden';
 import { Unauthorized } from '@/pages/Unauthorized';
@@ -105,6 +106,7 @@ export const router = createBrowserRouter([
     errorElement: <RouteErrorBoundary />,
     children: [
       { path: '/login', element: <LoginPage /> },
+      { path: '/forgot-password', element: <ForgotPasswordPage /> },
       { path: '/forbidden', element: <Forbidden /> },
       { path: '/unauthorized', element: <Unauthorized /> },
 

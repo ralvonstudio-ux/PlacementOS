@@ -1,6 +1,10 @@
 import bcrypt from 'bcrypt';
 import { candidateRepository, FindCandidateOptions, PaginatedCandidates } from './candidate.repository';
-import { createCandidateSchema, updateCandidateSchema, createLoginSchema, updateFacultyNoteSchema, bulkCreateLoginsSchema } from './candidate.validation';
+import { createCandidateSchema, updateCandidateSchema, createLoginSchema, updateFacultyNoteSchema, bulkCreateLoginsSchema, resetLoginPasswordSchema } from './candidate.validation';
+import { env } from '../../config/env';
+import { isMailerConfigured, sendEmail } from '../../lib/mailer';
+import { Institute } from '../institutes/institute.model';
+import { credentialsEmail } from './credential.emails';
 import { randomInt } from 'crypto';
 import { Candidate } from './candidate.model';
 import type { BulkCreateLoginsResult, IssuedCredential } from '@placementos/types';
@@ -22,6 +26,50 @@ function generatePassword(length = 10): string {
 
 /** Roll number → a login username: lowercase, only [a-z0-9._-]. */
 const usernameFromRoll = (roll: string) => roll.trim().toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '');
+
+// Bulk-created logins without a real email get this placeholder domain — never mailable.
+const PLACEHOLDER_DOMAIN = '@students.placementos.local';
+
+/** A student's reachable address: their own email on record, else a real login email. */
+function mailableAddress(c: { email?: string; loginEmail?: string }): string | null {
+  const own = c.email?.trim();
+  if (own) return own;
+  const login = c.loginEmail?.trim();
+  return login && !login.endsWith(PLACEHOLDER_DOMAIN) ? login : null;
+}
+
+/** Emails each credential to its student and records the outcome on it (emailedTo / emailError). */
+async function emailCredentials(
+  creds: IssuedCredential[],
+  addressOf: (cred: IssuedCredential) => string | null,
+  kind: 'welcome' | 'reset',
+  instituteId: string
+): Promise<void> {
+  if (!creds.length) return;
+  if (!isMailerConfigured()) {
+    for (const cred of creds) cred.emailError = 'Email is not set up on the server';
+    // Development still prints each email to the console so the flow can be checked.
+    if (env.NODE_ENV === 'production') return;
+  }
+  const institute = (await Institute.findById(instituteId).select('name').lean().catch(() => null)) as { name?: string } | null;
+  const brand = { instituteName: institute?.name ?? env.INSTITUTE_NAME, supportLine: 'Questions? Contact your Training & Placement Cell.' };
+  const loginUrl = `${env.FRONTEND_URL.split(',')[0].trim().replace(/\/$/, '')}/login`;
+
+  await inChunks(creds, 5, async (cred) => {
+    const to = addressOf(cred);
+    if (!to) {
+      cred.emailError = 'No email on record';
+      return;
+    }
+    const sent = await sendEmail(credentialsEmail({ to, fullName: cred.fullName, loginId: cred.loginId, password: cred.password, loginUrl, kind, ...brand }));
+    if (sent) {
+      cred.emailedTo = to;
+      delete cred.emailError;
+    } else if (isMailerConfigured()) {
+      cred.emailError = 'Sending failed — hand over a slip instead';
+    }
+  });
+}
 
 /** bcrypt is deliberately slow — hash a batch a few at a time instead of one by one. */
 async function inChunks<T, R>(items: T[], size: number, fn: (item: T) => Promise<R>): Promise<R[]> {
@@ -123,7 +171,7 @@ export const candidateService = {
    *  random password, and the student's own email when it's free (a placeholder otherwise —
    *  they sign in with the roll number either way). Passwords are returned once, never stored. */
   async bulkCreateLogins(rawInput: unknown, ctx: AuthContext): Promise<BulkCreateLoginsResult> {
-    const { candidateIds, batch } = bulkCreateLoginsSchema.parse(rawInput);
+    const { candidateIds, batch, emailCredentials: shouldEmail } = bulkCreateLoginsSchema.parse(rawInput);
     const candidates = (await Candidate.find({
       instituteId: ctx.instituteId,
       isDeleted: false,
@@ -183,11 +231,17 @@ export const candidateService = {
       return { candidateId: String(c._id), fullName: c.fullName, rollNumber: c.rollNumber, batch: c.batch, loginId: username, password };
     });
 
-    return { created: created.filter((x): x is IssuedCredential => !!x), skipped };
+    const issued = created.filter((x): x is IssuedCredential => !!x);
+    if (shouldEmail) {
+      const byId = new Map(candidates.map((c) => [String(c._id), c]));
+      await emailCredentials(issued, (cred) => { const c = byId.get(cred.candidateId); return c ? mailableAddress(c) : null; }, 'welcome', ctx.instituteId);
+    }
+    return { created: issued, skipped };
   },
 
   /** TPO/admin sets a new random password for a student and signs them out everywhere. */
-  async resetLoginPassword(id: string, ctx: AuthContext): Promise<IssuedCredential> {
+  async resetLoginPassword(id: string, rawInput: unknown, ctx: AuthContext): Promise<IssuedCredential> {
+    const { emailCredentials: shouldEmail } = resetLoginPasswordSchema.parse(rawInput ?? {});
     const candidate = await candidateRepository.findById(id, ctx.instituteId);
     if (!candidate) throw new NotFoundError('Candidate');
     if (!candidate.loginEmail) throw new ValidationError("This student doesn't have a login yet — create one first");
@@ -198,7 +252,7 @@ export const candidateService = {
     const password = generatePassword();
     // updatePassword also bumps tokenVersion, which ends every session signed in with the old one.
     await userRepository.updatePassword(String(user._id), await bcrypt.hash(password, SALT_ROUNDS));
-    return {
+    const issued: IssuedCredential = {
       candidateId: id,
       fullName: candidate.fullName,
       rollNumber: candidate.rollNumber,
@@ -206,5 +260,7 @@ export const candidateService = {
       loginId: user.username ?? candidate.loginEmail,
       password,
     };
+    if (shouldEmail) await emailCredentials([issued], () => mailableAddress(candidate), 'reset', ctx.instituteId);
+    return issued;
   },
 };

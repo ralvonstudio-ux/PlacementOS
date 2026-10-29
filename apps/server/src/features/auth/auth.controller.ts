@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { authService } from './auth.service';
+import { passwordResetService } from './password-reset.service';
 import { sendSuccess, sendCreated } from '../../lib/response';
 import { env } from '../../config/env';
 import { ValidationError, UnauthorizedError } from '../../middlewares/errorHandler';
@@ -19,6 +20,25 @@ export const authController = {
       const ip = req.ip ?? req.socket.remoteAddress;
       const result = await authService.login(req.body, ip);
       sendCreated(res, result, 'Login successful');
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async forgotPassword(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      await passwordResetService.requestCode(req.body);
+      // Same answer whether or not the account exists — no account discovery through this form.
+      sendSuccess(res, null, "If that account exists and has an email on file, we've sent it a 6-digit code.");
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async resetPassword(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      await passwordResetService.resetWithCode(req.body);
+      sendSuccess(res, null, 'Password updated — you can sign in now');
     } catch (err) {
       next(err);
     }

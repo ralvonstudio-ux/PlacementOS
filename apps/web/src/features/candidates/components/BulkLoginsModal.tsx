@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X, KeyRound, Download, Printer, Loader2, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { X, KeyRound, Download, Printer, Loader2, AlertTriangle, CheckCircle2, Mail, MailX } from 'lucide-react';
 import { useBulkCreateLogins, useCandidateBatches } from '../hooks/useCandidates';
 import { downloadCredentialsCsv, printCredentialSlips } from './credentialSlips';
 import type { BulkCreateLoginsResult } from '@placementos/types';
@@ -8,6 +8,7 @@ import type { BulkCreateLoginsResult } from '@placementos/types';
  *  credentials as a CSV and printable slips — the passwords are never shown again. */
 export function BulkLoginsModal({ onClose, missingCount }: { onClose: () => void; missingCount?: number }) {
   const [batch, setBatch] = useState('');
+  const [emailCreds, setEmailCreds] = useState(true);
   const [result, setResult] = useState<BulkCreateLoginsResult | null>(null);
   const [error, setError] = useState('');
   const [popupBlocked, setPopupBlocked] = useState(false);
@@ -17,7 +18,7 @@ export function BulkLoginsModal({ onClose, missingCount }: { onClose: () => void
   async function run() {
     setError('');
     try {
-      setResult(await create.mutateAsync(batch ? { batch } : {}));
+      setResult(await create.mutateAsync({ ...(batch ? { batch } : {}), emailCredentials: emailCreds }));
     } catch (err) {
       setError((err as Error).message);
     }
@@ -46,9 +47,16 @@ export function BulkLoginsModal({ onClose, missingCount }: { onClose: () => void
               <option value="">All batches</option>
               {batches.map((b) => <option key={b} value={b}>Batch {b}</option>)}
             </select>
+            <label className="flex items-start gap-2.5 rounded-xl border border-gray-200 px-4 py-3 mb-4 cursor-pointer hover:bg-gray-50">
+              <input type="checkbox" checked={emailCreds} onChange={(e) => setEmailCreds(e.target.checked)} className="mt-0.5 accent-violet-600" />
+              <span className="text-sm text-gray-700">
+                <span className="font-medium text-gray-900">Email each student their login details</span>
+                <span className="block text-xs text-gray-500 mt-0.5">Sent from PlacementOS to the email on each student's record. Students without an email get a printable slip instead.</span>
+              </span>
+            </label>
             <div className="rounded-xl bg-amber-50 border border-amber-100 px-4 py-3 text-xs text-amber-800 flex gap-2 mb-5">
               <AlertTriangle className="w-4 h-4 shrink-0" />
-              Passwords are shown only once, on the next screen. Download the CSV or print the slips before closing it. You can reset a student's password later if one gets lost.
+              Passwords are shown only once, on the next screen. Download the CSV or print slips for anyone not emailed before closing it. You can reset a student's password later if one gets lost.
             </div>
             {error && <p className="text-sm text-red-600 mb-3">{error}</p>}
             <button onClick={run} disabled={create.isPending} className="w-full inline-flex items-center justify-center gap-2 h-11 rounded-xl bg-violet-600 hover:bg-violet-700 text-sm font-semibold text-white disabled:opacity-50">
@@ -62,14 +70,33 @@ export function BulkLoginsModal({ onClose, missingCount }: { onClose: () => void
               <CheckCircle2 className="w-4 h-4" /> {result.created.length} login{result.created.length === 1 ? '' : 's'} created
               {result.skipped.length > 0 && <span className="text-amber-700 font-normal">· {result.skipped.length} skipped</span>}
             </p>
+            {emailCreds && result.created.length > 0 && (() => {
+              const emailed = result.created.filter((c) => c.emailedTo).length;
+              const notEmailed = result.created.length - emailed;
+              const reason = result.created.find((c) => c.emailError)?.emailError;
+              return (
+                <p className={`flex items-center gap-2 text-sm mb-4 ${notEmailed ? 'text-amber-700' : 'text-green-700'}`}>
+                  {notEmailed ? <MailX className="w-4 h-4" /> : <Mail className="w-4 h-4" />}
+                  Emailed {emailed} of {result.created.length}
+                  {notEmailed > 0 && <span className="font-normal">· {notEmailed} need a slip{reason === 'Email is not set up on the server' ? ' (email is not set up on the server yet)' : ''}</span>}
+                </p>
+              );
+            })()}
             {result.created.length > 0 && (
               <div className="flex flex-wrap gap-2 mb-4">
                 <button onClick={() => downloadCredentialsCsv(result.created, `student-logins${batch ? `-${batch}` : ''}.csv`)} className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-sm font-semibold text-white">
                   <Download className="w-4 h-4" /> Download CSV
                 </button>
-                <button onClick={() => setPopupBlocked(!printCredentialSlips(result.created))} className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-xl border border-gray-200 text-sm font-semibold text-gray-700 hover:bg-gray-50">
-                  <Printer className="w-4 h-4" /> Print slips
-                </button>
+                {(() => {
+                  const notEmailed = result.created.filter((c) => !c.emailedTo);
+                  const onlySome = emailCreds && notEmailed.length > 0 && notEmailed.length < result.created.length;
+                  if (emailCreds && notEmailed.length === 0) return null;
+                  return (
+                    <button onClick={() => setPopupBlocked(!printCredentialSlips(emailCreds ? notEmailed : result.created))} className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-xl border border-gray-200 text-sm font-semibold text-gray-700 hover:bg-gray-50">
+                      <Printer className="w-4 h-4" /> {onlySome ? `Print slips for the ${notEmailed.length} not emailed` : 'Print slips'}
+                    </button>
+                  );
+                })()}
               </div>
             )}
             {popupBlocked && <p className="text-xs text-red-600 mb-3">The browser blocked the print window — allow pop-ups for this site and try again.</p>}
@@ -79,7 +106,7 @@ export function BulkLoginsModal({ onClose, missingCount }: { onClose: () => void
             <div className="overflow-y-auto rounded-xl border border-gray-100 min-h-0">
               <table className="min-w-full text-sm">
                 <thead className="bg-gray-50 text-left text-xs text-gray-500 sticky top-0">
-                  <tr><th className="px-3 py-2 font-medium">Student</th><th className="px-3 py-2 font-medium">Login ID</th><th className="px-3 py-2 font-medium">Password</th></tr>
+                  <tr><th className="px-3 py-2 font-medium">Student</th><th className="px-3 py-2 font-medium">Login ID</th><th className="px-3 py-2 font-medium">Password</th>{emailCreds && <th className="px-3 py-2 font-medium">Email</th>}</tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
                   {result.created.map((c) => (
@@ -87,12 +114,17 @@ export function BulkLoginsModal({ onClose, missingCount }: { onClose: () => void
                       <td className="px-3 py-2"><p className="font-medium text-gray-900">{c.fullName}</p><p className="text-xs text-gray-400">{c.rollNumber} · {c.batch}</p></td>
                       <td className="px-3 py-2 font-mono text-gray-800">{c.loginId}</td>
                       <td className="px-3 py-2 font-mono font-semibold text-gray-900 tracking-wide">{c.password}</td>
+                      {emailCreds && (
+                        <td className="px-3 py-2 text-xs">
+                          {c.emailedTo ? <span className="inline-flex items-center gap-1 text-green-700" title={c.emailedTo}><Mail className="w-3.5 h-3.5" /> Sent</span> : <span className="text-amber-700">{c.emailError ?? 'Not sent'}</span>}
+                        </td>
+                      )}
                     </tr>
                   ))}
                   {result.skipped.map((s) => (
                     <tr key={`skip-${s.rollNumber}`} className="bg-amber-50/40">
                       <td className="px-3 py-2"><p className="font-medium text-gray-900">{s.fullName}</p><p className="text-xs text-gray-400">{s.rollNumber}</p></td>
-                      <td colSpan={2} className="px-3 py-2 text-xs text-amber-700">Skipped — {s.reason}</td>
+                      <td colSpan={emailCreds ? 3 : 2} className="px-3 py-2 text-xs text-amber-700">Skipped — {s.reason}</td>
                     </tr>
                   ))}
                 </tbody>
