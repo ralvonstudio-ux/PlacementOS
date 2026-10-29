@@ -86,7 +86,7 @@ export const candidateController = {
   async resetLoginPassword(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const ctx = buildAuthContext(req.user!, req.ip ?? undefined);
-      const result = await candidateService.resetLoginPassword(req.params.id, ctx);
+      const result = await candidateService.resetLoginPassword(req.params.id, req.body, ctx);
       sendSuccess(res, result, 'Password reset');
     } catch (err) {
       next(err);

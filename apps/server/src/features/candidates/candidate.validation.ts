@@ -33,6 +33,11 @@ export const createLoginSchema = z.object({
 export const bulkCreateLoginsSchema = z.object({
   candidateIds: z.array(z.string().min(1)).max(500).optional(),
   batch: z.string().trim().min(1).optional(),
+  emailCredentials: z.boolean().optional().default(false),
+});
+
+export const resetLoginPasswordSchema = z.object({
+  emailCredentials: z.boolean().optional().default(false),
 });
 
 export const listCandidateSchema = z.object({

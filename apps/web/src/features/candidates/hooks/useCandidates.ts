@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { candidatesApi, CandidateListOptions, CreateCandidatePayload } from '../api/candidates.api';
-import type { CreateCandidateLoginPayload, BulkCreateLoginsPayload } from '@placementos/types';
+import type { CreateCandidateLoginPayload, BulkCreateLoginsPayload, ResetLoginPasswordPayload } from '@placementos/types';
 
 export const candidateKeys = {
   all: ['candidates'] as const,
@@ -67,4 +67,4 @@ export const useBulkCreateLogins = () => {
 };
 
 export const useResetCandidatePassword = () =>
-  useMutation({ mutationFn: (id: string) => candidatesApi.resetPassword(id) });
+  useMutation({ mutationFn: ({ id, payload }: { id: string; payload?: ResetLoginPasswordPayload }) => candidatesApi.resetPassword(id, payload) });

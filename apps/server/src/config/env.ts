@@ -37,6 +37,14 @@ const envSchema = z.object({
   ONLINECOMPILER_API_KEY: z.string().optional(),
   ONLINECOMPILER_API_URL: z.string().default('https://api.onlinecompiler.io'),
   ONLINECOMPILER_MAX_TESTS: z.coerce.number().int().min(1).default(8),
+  // Outgoing email (password reset codes) over SMTP — any provider. Unset SMTP_HOST = emails are
+  // printed to the console in development and skipped in production.
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.coerce.number().int().default(587),
+  SMTP_SECURE: z.preprocess((v) => (v === '' || v === undefined ? undefined : v === 'true'), z.boolean().optional()),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+  EMAIL_FROM: z.string().default('PlacementOS <no-reply@placementos.app>'),
   // Cloudflare R2 (file storage)
   R2_ACCOUNT_ID: z.string().optional(),
   R2_ACCESS_KEY_ID: z.string().optional(),
