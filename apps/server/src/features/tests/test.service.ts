@@ -26,7 +26,7 @@ import { resolveCandidateId } from '../candidates/candidate.service';
 import { notificationRepository } from '../notifications/notification.repository';
 import { assertFacultyCanAccessQuestionBank } from '../training-schedule/training-schedule.service';
 import { testGeneratorService } from './test-generator.service';
-import { isJudge0Configured, runOnJudge0, runBatchOnJudge0 } from '../../lib/judge0';
+import { isCodeRunnerConfigured, runCodeBatch } from '../../lib/code-runner';
 import { Semaphore } from '../../lib/semaphore';
 import type {
   Test as TestApiShape,
@@ -253,9 +253,10 @@ function generateAccessCode(length = 6): string {
   return code;
 }
 
-// Caps how many Judge0 batches this process has in flight at once — a whole class can hit
-// Run/Submit at the same moment, and a final submit judges every coding question.
-const judge0Semaphore = new Semaphore(6);
+// Caps how many code-execution batches this process has in flight at once — a whole class can
+// hit Run/Submit at the same moment, and a final submit judges every coding question. Requests
+// beyond the provider's own concurrency are queued/retried by the runner itself.
+const codeRunSemaphore = new Semaphore(6);
 
 /** Trailing whitespace on each line and trailing blank lines never decide a verdict — and
  *  Windows line endings in a pasted expected output compare equal to Linux ones. */
@@ -271,12 +272,12 @@ const maskHidden = (r: RunCodeCaseResult): RunCodeCaseResult =>
  *  trailing whitespace — the same tolerance every judge (including Judge0 itself) applies, so a
  *  correct solution isn't marked wrong over a trailing newline. */
 async function runAgainstTestCases(code: string, language: NonNullable<ITestQuestionSnapshot['allowedLanguages']>[number], cases: NonNullable<ITestQuestionSnapshot['testCases']>): Promise<RunCodeResult> {
-  if (!isJudge0Configured()) {
+  if (!isCodeRunnerConfigured()) {
     return { status: 'not_configured', results: [], allPassed: false };
   }
 
   // All cases go to Judge0 as one batch; results keep the cases' order.
-  const runs = await judge0Semaphore.run(() => runBatchOnJudge0({ code, language, stdins: cases.map((testCase) => testCase.input) }));
+  const runs = await codeRunSemaphore.run(() => runCodeBatch({ code, language, stdins: cases.map((testCase) => testCase.input) }));
 
   const compileFailure = runs.find((run) => run.statusId === 6);
   if (compileFailure) {
@@ -335,7 +336,7 @@ async function scoreAttemptDetailed(test: ITest, attempt: ITestAttempt): Promise
         if (sub && sub.code === answer.code && sub.language === answer.language && sub.totalCount > 0) {
           return codingResult(question, i, sub.passedCount, sub.totalCount);
         }
-        if (!isJudge0Configured()) return { questionIndex: i, status: 'partial', marksObtained: 0 };
+        if (!isCodeRunnerConfigured()) return { questionIndex: i, status: 'partial', marksObtained: 0 };
         try {
           const result = await runAgainstTestCases(answer.code, answer.language, question.testCases);
           if (result.status === 'compile_error') return { questionIndex: i, status: 'wrong', marksObtained: 0 };
@@ -1204,8 +1205,8 @@ export const testService = {
     const { question } = await loadCodingQuestion(attemptId, data, ctx);
 
     if (data.customInput !== undefined) {
-      if (!isJudge0Configured()) return { status: 'not_configured', results: [], allPassed: false };
-      const run = await judge0Semaphore.run(() => runOnJudge0({ code: data.code, language: data.language, stdin: data.customInput ?? '' }));
+      if (!isCodeRunnerConfigured()) return { status: 'not_configured', results: [], allPassed: false };
+      const [run] = await codeRunSemaphore.run(() => runCodeBatch({ code: data.code, language: data.language, stdins: [data.customInput ?? ''] }));
       if (run.statusId === 6) return { status: 'compile_error', compileError: run.compileOutput || run.stderr, results: [], allPassed: false };
       return { status: 'ok', results: [], allPassed: false, custom: { stdout: run.stdout, stderr: run.stderr, status: run.status, time: run.time } };
     }

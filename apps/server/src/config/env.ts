@@ -30,6 +30,13 @@ const envSchema = z.object({
   JUDGE0_API_URL: z.string().optional(),
   JUDGE0_API_KEY: z.string().optional(),
   JUDGE0_API_HOST: z.string().default('judge0-ce.p.rapidapi.com'),
+  // OnlineCompiler.io (alternative code runner, current compilers) — used whenever its key is
+  // set, unless CODE_RUNNER forces one. ONLINECOMPILER_MAX_TESTS is the plan's tests-per-request
+  // cap (Free 8, Starter 20, Pro 40).
+  CODE_RUNNER: z.preprocess((v) => (v === '' ? undefined : v), z.enum(['onlinecompiler', 'judge0']).optional()),
+  ONLINECOMPILER_API_KEY: z.string().optional(),
+  ONLINECOMPILER_API_URL: z.string().default('https://api.onlinecompiler.io'),
+  ONLINECOMPILER_MAX_TESTS: z.coerce.number().int().min(1).default(8),
   // Cloudflare R2 (file storage)
   R2_ACCOUNT_ID: z.string().optional(),
   R2_ACCESS_KEY_ID: z.string().optional(),
