@@ -40,6 +40,7 @@ const NAV_ITEMS_FACULTY = [
   { label: 'My Batches', icon: BookOpen, path: '/faculty/batches', end: false },
   { label: 'Training Plan', icon: Sparkles, path: '/faculty/training-plan', end: false },
   { label: 'Question Bank', icon: Library, path: '/faculty/question-bank', end: false },
+  { label: 'GD, PI & Aptitude', icon: BookMarked, path: '/faculty/practice', end: false },
   { label: 'Worksheets', icon: FileCheck2, path: '/faculty/worksheets', end: false },
   { label: 'Tests', icon: ShieldCheck, path: '/faculty/tests', end: false },
   { label: 'Leave Requests', icon: CalendarOff, path: '/faculty/leave-requests', end: false },
@@ -76,7 +77,7 @@ const NAV_SECTION_TPO_STAFF = [
 
 const NAV_SECTION_TPO_TESTS = [
   { label: 'Tests', icon: ShieldCheck, path: '/tpo/tests', end: false },
-  { label: 'Practice Library', icon: BookMarked, path: '/tpo/practice', end: false },
+  { label: 'GD, PI & Aptitude', icon: BookMarked, path: '/tpo/practice', end: false },
 ] as const;
 
 const NAV_SECTION_TPO_PLACEMENTS = [
@@ -105,8 +106,7 @@ const NAV_SECTIONS_TPO = [
 const NAV_ITEMS_CANDIDATE = [
   { label: 'My Dashboard', icon: LayoutDashboard, path: '/candidate', end: true },
   { label: 'Resume', icon: FileText, path: '/candidate/resume', end: false },
-  { label: 'PI Questions', icon: MessageSquare, path: '/candidate/practice/pi', end: false },
-  { label: 'GD Questions', icon: Users2, path: '/candidate/practice/gd', end: false },
+  { label: 'GD & Interview', icon: MessageSquare, path: '/candidate/practice/gd', end: false },
   { label: 'Aptitude & Reasoning', icon: Calculator, path: '/candidate/practice/aptitude', end: false },
   { label: 'Company Questions', icon: Building2, path: '/candidate/practice/company', end: false },
   { label: 'Practice Sheets', icon: BookMarked, path: '/candidate/practice-sheets', end: false },

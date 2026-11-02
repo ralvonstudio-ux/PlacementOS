@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { practiceApi } from '../api/practice.api';
-import type { CreatePracticeQuestionPayload, UpdatePracticeQuestionPayload, PracticeQuestionListOptions, CreatePracticeSheetPayload } from '@placementos/types';
+import type { CreatePracticeQuestionPayload, UpdatePracticeQuestionPayload, AssignPracticeQuestionsPayload, PracticeQuestionListOptions, CreatePracticeSheetPayload } from '@placementos/types';
 
 export const practiceKeys = {
   all: ['practice'] as const,
@@ -29,6 +29,14 @@ export const useUpdatePracticeQuestion = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, payload }: { id: string; payload: UpdatePracticeQuestionPayload }) => practiceApi.updateQuestion(id, payload),
+    onSuccess: () => qc.invalidateQueries({ queryKey: practiceKeys.all }),
+  });
+};
+
+export const useAssignPracticeQuestions = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: AssignPracticeQuestionsPayload) => practiceApi.assignQuestions(payload),
     onSuccess: () => qc.invalidateQueries({ queryKey: practiceKeys.all }),
   });
 };

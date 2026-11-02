@@ -3,10 +3,12 @@ import mongoose, { Document, Schema } from 'mongoose';
 export type PracticeCategory = 'aptitude' | 'reasoning' | 'pi' | 'gd' | 'company';
 export type PracticeQuestionType = 'mcq' | 'open_ended';
 export type PracticeDifficulty = 'easy' | 'medium' | 'hard';
+export type PracticeAudience = 'all' | 'batches' | 'students';
 
 const CATEGORIES: PracticeCategory[] = ['aptitude', 'reasoning', 'pi', 'gd', 'company'];
 const QUESTION_TYPES: PracticeQuestionType[] = ['mcq', 'open_ended'];
 const DIFFICULTIES: PracticeDifficulty[] = ['easy', 'medium', 'hard'];
+const AUDIENCES: PracticeAudience[] = ['all', 'batches', 'students'];
 
 export interface IPracticeQuestion extends Document {
   instituteId: string;
@@ -20,6 +22,12 @@ export interface IPracticeQuestion extends Document {
   guidancePoints?: string[];
   difficulty?: PracticeDifficulty;
   tags: string[];
+  /** Visibility to candidates; absent on legacy rows, which are treated as 'all'. */
+  audience?: PracticeAudience;
+  batches?: string[];
+  candidateIds?: string[];
+  /** Set on starter-pack rows so the pack is only ever loaded once per institute. */
+  seedKey?: string;
   createdBy: string;
   isDeleted: boolean;
   deletedAt?: Date;
@@ -36,10 +44,14 @@ const practiceQuestionSchema = new Schema<IPracticeQuestion>(
     questionType: { type: String, enum: QUESTION_TYPES, required: true },
     options: { type: [String] },
     correctAnswer: { type: String, trim: true },
-    explanation: { type: String, trim: true, maxlength: 1000 },
+    explanation: { type: String, trim: true, maxlength: 2500 },
     guidancePoints: { type: [String] },
     difficulty: { type: String, enum: DIFFICULTIES },
     tags: { type: [String], default: [] },
+    audience: { type: String, enum: AUDIENCES, default: 'all' },
+    batches: { type: [String], default: [] },
+    candidateIds: { type: [String], default: [] },
+    seedKey: { type: String },
     createdBy: { type: String, required: true },
     isDeleted: { type: Boolean, default: false },
     deletedAt: { type: Date },
@@ -49,6 +61,7 @@ const practiceQuestionSchema = new Schema<IPracticeQuestion>(
 
 practiceQuestionSchema.index({ instituteId: 1, isDeleted: 1, category: 1 });
 practiceQuestionSchema.index({ instituteId: 1, isDeleted: 1, companyName: 1 });
+practiceQuestionSchema.index({ instituteId: 1, seedKey: 1 }, { unique: true, partialFilterExpression: { seedKey: { $type: 'string' } } });
 
 export const PracticeQuestion = mongoose.model<IPracticeQuestion>('PracticeQuestion', practiceQuestionSchema);
 

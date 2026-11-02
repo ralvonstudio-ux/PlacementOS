@@ -36,6 +36,14 @@ export const practiceController = {
     } catch (err) { next(err); }
   },
 
+  async assignQuestions(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const ctx = buildAuthContext(req.user!, req.ip ?? undefined);
+      const result = await practiceService.assignQuestions(req.body, ctx);
+      sendSuccess(res, result, 'Questions assigned');
+    } catch (err) { next(err); }
+  },
+
   async deleteQuestion(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const ctx = buildAuthContext(req.user!, req.ip ?? undefined);

@@ -133,6 +133,7 @@ export const router = createBrowserRouter([
                   { path: 'question-bank/papers', element: <PapersListPage /> },
                   { path: 'question-bank/papers/generate', element: <PaperGeneratorPage /> },
                   { path: 'question-bank/papers/:id', element: <PaperPreviewPage /> },
+                  { path: 'practice', element: <TpoPracticeLibraryPage /> },
                   { path: 'worksheets', element: <WorksheetsPage /> },
                   { path: 'worksheets/:id', element: <WorksheetDetailPage /> },
                   { path: 'training-plan', element: <AcademicPlanPage /> },

@@ -3,6 +3,18 @@ import { z } from 'zod';
 const CATEGORIES = ['aptitude', 'reasoning', 'pi', 'gd', 'company'] as const;
 const QUESTION_TYPES = ['mcq', 'open_ended'] as const;
 const DIFFICULTIES = ['easy', 'medium', 'hard'] as const;
+const AUDIENCES = ['all', 'batches', 'students'] as const;
+
+const audienceFields = {
+  audience: z.enum(AUDIENCES).optional(),
+  batches: z.array(z.string().trim().min(1)).optional(),
+  candidateIds: z.array(z.string().trim().min(1)).optional(),
+};
+
+const audienceTargetRefine = (v: { audience?: (typeof AUDIENCES)[number]; batches?: string[]; candidateIds?: string[] }) =>
+  v.audience !== 'batches' || (v.batches?.length ?? 0) > 0;
+const audienceStudentRefine = (v: { audience?: (typeof AUDIENCES)[number]; candidateIds?: string[] }) =>
+  v.audience !== 'students' || (v.candidateIds?.length ?? 0) > 0;
 
 export const createPracticeQuestionSchema = z
   .object({
@@ -12,11 +24,14 @@ export const createPracticeQuestionSchema = z
     questionType: z.enum(QUESTION_TYPES),
     options: z.array(z.string()).optional(),
     correctAnswer: z.string().trim().optional(),
-    explanation: z.string().trim().max(1000).optional(),
+    explanation: z.string().trim().max(2500).optional(),
     guidancePoints: z.array(z.string()).optional(),
     difficulty: z.enum(DIFFICULTIES).optional(),
     tags: z.array(z.string()).optional(),
+    ...audienceFields,
   })
+  .refine(audienceTargetRefine, { message: 'Pick at least one batch', path: ['batches'] })
+  .refine(audienceStudentRefine, { message: 'Pick at least one student', path: ['candidateIds'] })
   .refine((v) => v.category !== 'company' || !!v.companyName?.trim(), {
     message: 'companyName is required for category "company"',
     path: ['companyName'],
@@ -26,18 +41,32 @@ export const createPracticeQuestionSchema = z
     path: ['options'],
   });
 
-export const updatePracticeQuestionSchema = z.object({
-  category: z.enum(CATEGORIES).optional(),
-  companyName: z.string().trim().optional(),
-  questionText: z.string().min(1).trim().optional(),
-  questionType: z.enum(QUESTION_TYPES).optional(),
-  options: z.array(z.string()).optional(),
-  correctAnswer: z.string().trim().optional(),
-  explanation: z.string().trim().max(1000).optional(),
-  guidancePoints: z.array(z.string()).optional(),
-  difficulty: z.enum(DIFFICULTIES).optional(),
-  tags: z.array(z.string()).optional(),
-});
+export const updatePracticeQuestionSchema = z
+  .object({
+    category: z.enum(CATEGORIES).optional(),
+    companyName: z.string().trim().optional(),
+    questionText: z.string().min(1).trim().optional(),
+    questionType: z.enum(QUESTION_TYPES).optional(),
+    options: z.array(z.string()).optional(),
+    correctAnswer: z.string().trim().optional(),
+    explanation: z.string().trim().max(2500).optional(),
+    guidancePoints: z.array(z.string()).optional(),
+    difficulty: z.enum(DIFFICULTIES).optional(),
+    tags: z.array(z.string()).optional(),
+    ...audienceFields,
+  })
+  .refine(audienceTargetRefine, { message: 'Pick at least one batch', path: ['batches'] })
+  .refine(audienceStudentRefine, { message: 'Pick at least one student', path: ['candidateIds'] });
+
+export const assignPracticeQuestionsSchema = z
+  .object({
+    questionIds: z.array(z.string()).min(1, 'Select at least one question'),
+    audience: z.enum(AUDIENCES),
+    batches: z.array(z.string().trim().min(1)).optional(),
+    candidateIds: z.array(z.string().trim().min(1)).optional(),
+  })
+  .refine(audienceTargetRefine, { message: 'Pick at least one batch', path: ['batches'] })
+  .refine(audienceStudentRefine, { message: 'Pick at least one student', path: ['candidateIds'] });
 
 export const listPracticeQuestionSchema = z.object({
   category: z.enum(CATEGORIES).optional(),
@@ -58,4 +87,5 @@ export const createPracticeSheetSchema = z.object({
 export type CreatePracticeQuestionInput = z.infer<typeof createPracticeQuestionSchema>;
 export type UpdatePracticeQuestionInput = z.infer<typeof updatePracticeQuestionSchema>;
 export type ListPracticeQuestionInput = z.infer<typeof listPracticeQuestionSchema>;
+export type AssignPracticeQuestionsInput = z.infer<typeof assignPracticeQuestionsSchema>;
 export type CreatePracticeSheetInput = z.infer<typeof createPracticeSheetSchema>;

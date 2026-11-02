@@ -5,6 +5,7 @@ import type {
   PracticeQuestion,
   CreatePracticeQuestionPayload,
   UpdatePracticeQuestionPayload,
+  AssignPracticeQuestionsPayload,
   PracticeQuestionListOptions,
   PracticeSheet,
   CreatePracticeSheetPayload,
@@ -37,6 +38,13 @@ export const practiceApi = {
   async updateQuestion(id: string, payload: UpdatePracticeQuestionPayload): Promise<PracticeQuestion> {
     try {
       const res = await apiClient.patch<ApiResponse<PracticeQuestion>>(`${BASE}/questions/${id}`, payload);
+      return res.data.data!;
+    } catch (err) { throw new Error(extractErrorMessage(err)); }
+  },
+
+  async assignQuestions(payload: AssignPracticeQuestionsPayload): Promise<{ updated: number }> {
+    try {
+      const res = await apiClient.post<ApiResponse<{ updated: number }>>(`${BASE}/questions/assign`, payload);
       return res.data.data!;
     } catch (err) { throw new Error(extractErrorMessage(err)); }
   },

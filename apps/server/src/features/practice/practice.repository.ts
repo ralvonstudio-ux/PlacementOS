@@ -1,5 +1,12 @@
 import { PracticeQuestion, IPracticeQuestion, PracticeSheet, IPracticeSheet } from './practice.model';
-import { ListPracticeQuestionInput, CreatePracticeQuestionInput } from './practice.validation';
+import { ListPracticeQuestionInput, CreatePracticeQuestionInput, AssignPracticeQuestionsInput } from './practice.validation';
+import { STARTER_QUESTIONS } from './practice.seed';
+
+/** A candidate's identity for audience filtering. */
+export interface PracticeViewer {
+  candidateId: string;
+  batch: string;
+}
 
 export interface PaginatedPracticeQuestions {
   data: IPracticeQuestion[];
@@ -20,7 +27,7 @@ export const practiceQuestionRepository = {
     return PracticeQuestion.find({ _id: { $in: ids }, instituteId, isDeleted: false }).lean<IPracticeQuestion[]>();
   },
 
-  async findAll(instituteId: string, opts: ListPracticeQuestionInput): Promise<PaginatedPracticeQuestions> {
+  async findAll(instituteId: string, opts: ListPracticeQuestionInput, viewer?: PracticeViewer): Promise<PaginatedPracticeQuestions> {
     const page = Math.max(1, opts.page ?? 1);
     const limit = Math.min(200, Math.max(1, opts.limit ?? 20));
     const skip = (page - 1) * limit;
@@ -31,11 +38,24 @@ export const practiceQuestionRepository = {
     if (opts.difficulty) filter.difficulty = opts.difficulty;
     if (opts.search?.trim()) {
       const regex = new RegExp(opts.search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-      filter.$or = [{ questionText: regex }, { tags: regex }];
+      filter.$and = [{ $or: [{ questionText: regex }, { tags: regex }] }];
+    }
+    // Candidates only see what was shared with everyone, their batch, or them personally. Rows that
+    // pre-date targeting have no audience and stay visible to everyone.
+    if (viewer) {
+      const visible = {
+        $or: [
+          { audience: { $exists: false } },
+          { audience: 'all' },
+          { audience: 'batches', batches: viewer.batch },
+          { audience: 'students', candidateIds: viewer.candidateId },
+        ],
+      };
+      filter.$and = [...((filter.$and as unknown[]) ?? []), visible];
     }
 
     const [data, total] = await Promise.all([
-      PracticeQuestion.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean<IPracticeQuestion[]>(),
+      PracticeQuestion.find(filter).sort({ createdAt: 1 }).skip(skip).limit(limit).lean<IPracticeQuestion[]>(),
       PracticeQuestion.countDocuments(filter),
     ]);
 
@@ -50,6 +70,36 @@ export const practiceQuestionRepository = {
 
   async update(id: string, instituteId: string, data: Partial<CreatePracticeQuestionInput>): Promise<IPracticeQuestion | null> {
     return PracticeQuestion.findOneAndUpdate({ _id: id, instituteId, isDeleted: false }, { $set: data }, { new: true });
+  },
+
+  /** Re-target many questions at once; returns how many were updated. */
+  async assign(instituteId: string, data: AssignPracticeQuestionsInput): Promise<number> {
+    const res = await PracticeQuestion.updateMany(
+      { _id: { $in: data.questionIds }, instituteId, isDeleted: false },
+      {
+        $set: {
+          audience: data.audience,
+          batches: data.audience === 'batches' ? data.batches ?? [] : [],
+          candidateIds: data.audience === 'students' ? data.candidateIds ?? [] : [],
+        },
+      }
+    );
+    return res.matchedCount;
+  },
+
+  /** Counts starter rows including soft-deleted ones, so a trainer who deletes a starter question never gets it back. */
+  async countStarterRows(instituteId: string): Promise<number> {
+    return PracticeQuestion.countDocuments({ instituteId, seedKey: { $type: 'string' } });
+  },
+
+  async insertStarterPack(instituteId: string, createdBy: string): Promise<void> {
+    const docs = STARTER_QUESTIONS.map((q) => ({ ...q, audience: 'all' as const, instituteId, createdBy }));
+    try {
+      await PracticeQuestion.insertMany(docs, { ordered: false });
+    } catch (err) {
+      // A concurrent request already loaded the pack (unique {instituteId, seedKey}) — that's fine.
+      if ((err as { code?: number }).code !== 11000 && !(err as { writeErrors?: unknown[] }).writeErrors) throw err;
+    }
   },
 
   async softDelete(id: string, instituteId: string): Promise<boolean> {

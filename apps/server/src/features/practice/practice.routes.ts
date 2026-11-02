@@ -11,6 +11,7 @@ router.use(authenticate);
 router.get('/questions', practiceController.listQuestions);
 router.get('/companies', practiceController.listCompanies);
 router.post('/questions', authorize('admin', 'tpo', 'faculty'), practiceController.createQuestion);
+router.post('/questions/assign', authorize('admin', 'tpo', 'faculty'), practiceController.assignQuestions);
 router.patch('/questions/:id', authorize('admin', 'tpo', 'faculty'), practiceController.updateQuestion);
 router.delete('/questions/:id', authorize('admin', 'tpo', 'faculty'), practiceController.deleteQuestion);
 

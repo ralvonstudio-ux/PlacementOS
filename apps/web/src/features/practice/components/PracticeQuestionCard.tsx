@@ -56,20 +56,28 @@ export function PracticeQuestionCard({ question, index }: { question: PracticeQu
         <div>
           {!revealed ? (
             <button onClick={() => setRevealed(true)} className="text-xs font-semibold text-violet-600 hover:text-violet-700">
-              Show answer guidance
+              Show answer &amp; solution
             </button>
           ) : (
-            <ul className="space-y-1.5 mt-1">
-              {(question.guidancePoints ?? []).map((point, i) => (
-                <li key={i} className="text-sm text-gray-600 flex items-start gap-2">
-                  <span className="w-1 h-1 rounded-full bg-gray-300 mt-2 shrink-0" />
-                  {point}
-                </li>
-              ))}
-              {(!question.guidancePoints || question.guidancePoints.length === 0) && (
-                <li className="text-sm text-gray-400">No guidance notes added for this one yet.</li>
+            <div className="space-y-3 mt-1">
+              <ul className="space-y-1.5">
+                {(question.guidancePoints ?? []).map((point, i) => (
+                  <li key={i} className="text-sm text-gray-600 flex items-start gap-2">
+                    <span className="w-1 h-1 rounded-full bg-gray-300 mt-2 shrink-0" />
+                    {point}
+                  </li>
+                ))}
+                {!question.guidancePoints?.length && !question.explanation && (
+                  <li className="text-sm text-gray-400">No guidance notes added for this one yet.</li>
+                )}
+              </ul>
+              {question.explanation && (
+                <div className="flex items-start gap-2 text-sm text-gray-600 bg-violet-50/60 rounded-lg px-3 py-2.5">
+                  <Lightbulb className="w-3.5 h-3.5 text-violet-500 mt-1 shrink-0" />
+                  <p><span className="font-semibold text-gray-800">Model answer: </span>{question.explanation}</p>
+                </div>
               )}
-            </ul>
+            </div>
           )}
         </div>
       )}

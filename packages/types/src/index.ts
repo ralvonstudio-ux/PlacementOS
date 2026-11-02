@@ -1337,6 +1337,8 @@ export interface LeetCodeStats {
 export type PracticeCategory = 'aptitude' | 'reasoning' | 'pi' | 'gd' | 'company';
 export type PracticeQuestionType = 'mcq' | 'open_ended';
 export type PracticeDifficulty = 'easy' | 'medium' | 'hard';
+/** Who can see a practice question: everyone, specific batches, or hand-picked students. */
+export type PracticeAudience = 'all' | 'batches' | 'students';
 
 export interface PracticeQuestion {
   _id: string;
@@ -1353,6 +1355,11 @@ export interface PracticeQuestion {
   guidancePoints?: string[];
   difficulty?: PracticeDifficulty;
   tags: string[];
+  audience?: PracticeAudience;
+  /** Batches that can see the question when audience is 'batches'. */
+  batches?: string[];
+  /** Candidate ids that can see the question when audience is 'students'. */
+  candidateIds?: string[];
   createdBy: string;
   createdAt: string;
   updatedAt: string;
@@ -1369,9 +1376,20 @@ export interface CreatePracticeQuestionPayload {
   guidancePoints?: string[];
   difficulty?: PracticeDifficulty;
   tags?: string[];
+  audience?: PracticeAudience;
+  batches?: string[];
+  candidateIds?: string[];
 }
 
 export type UpdatePracticeQuestionPayload = Partial<CreatePracticeQuestionPayload>;
+
+/** Bulk-(re)assign who can see a set of existing practice questions. */
+export interface AssignPracticeQuestionsPayload {
+  questionIds: string[];
+  audience: PracticeAudience;
+  batches?: string[];
+  candidateIds?: string[];
+}
 
 export interface PracticeQuestionListOptions {
   category?: PracticeCategory;

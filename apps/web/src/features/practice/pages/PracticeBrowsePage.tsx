@@ -16,8 +16,19 @@ const CATEGORY_META: Record<PracticeCategory, { title: string; subtitle: string 
   company: { title: 'Company-wise Questions', subtitle: 'Previously asked questions, grouped by company' },
 };
 
+// Sibling categories shown together as tabs: GD + PI, and aptitude + reasoning.
+const TAB_GROUPS: Partial<Record<PracticeCategory, { value: PracticeCategory; label: string }[]>> = {
+  gd: [{ value: 'gd', label: 'Group Discussion' }, { value: 'pi', label: 'Personal Interview' }],
+  pi: [{ value: 'gd', label: 'Group Discussion' }, { value: 'pi', label: 'Personal Interview' }],
+  aptitude: [{ value: 'aptitude', label: 'Aptitude' }, { value: 'reasoning', label: 'Reasoning' }],
+  reasoning: [{ value: 'aptitude', label: 'Aptitude' }, { value: 'reasoning', label: 'Reasoning' }],
+};
+
 export function PracticeBrowsePage() {
-  const { category } = useParams<{ category: PracticeCategory }>();
+  const { category: routeCategory } = useParams<{ category: PracticeCategory }>();
+  const [tab, setTab] = useState<PracticeCategory | undefined>(undefined);
+  const category = tab && TAB_GROUPS[routeCategory as PracticeCategory]?.some((t) => t.value === tab) ? tab : routeCategory;
+  const tabs = routeCategory ? TAB_GROUPS[routeCategory] : undefined;
   const meta = category ? CATEGORY_META[category] : undefined;
   const [company, setCompany] = useState<string | undefined>(undefined);
 
@@ -28,6 +39,16 @@ export function PracticeBrowsePage() {
   return (
     <PageContainer>
       <WorkspaceHeader title={meta?.title ?? 'Practice'} subtitle={meta?.subtitle} />
+
+      {tabs && (
+        <div className="mb-6 flex flex-wrap gap-2">
+          {tabs.map((t) => (
+            <button key={t.value} onClick={() => setTab(t.value)} className={`h-8 px-3.5 rounded-full text-xs font-medium border transition-colors ${category === t.value ? 'bg-violet-600 border-violet-600 text-white' : 'bg-white border-gray-200 text-gray-600 hover:border-violet-300'}`}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {category === 'company' && companies.length > 0 && (
         <div className="mb-6 flex flex-wrap gap-2">
@@ -45,7 +66,7 @@ export function PracticeBrowsePage() {
       {isLoading ? (
         <div className="space-y-3">{[1, 2, 3, 4].map((i) => <div key={i} className="h-20 bg-gray-100 rounded-2xl animate-pulse" />)}</div>
       ) : questions.length === 0 ? (
-        <EmptyState icon={BookOpen} title="Nothing here yet" description="Your TPO or faculty haven't added practice material for this section yet." />
+        <EmptyState icon={BookOpen} title="Nothing here yet" description="Nothing has been shared with you in this section yet — check back soon." />
       ) : (
         <div className="space-y-3 max-w-3xl">
           {questions.map((q, i) => <PracticeQuestionCard key={q._id} question={q} index={i} />)}
