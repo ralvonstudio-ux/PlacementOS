@@ -89,6 +89,7 @@ function validate(title: string, sections: BuilderSection[]): string[] {
         const opts = (q.options ?? []).filter((o) => o.trim());
         if (opts.length < 2) errors.push(`${where(qi)}: needs at least 2 options.`);
         if (!q.correctAnswer || !opts.includes(q.correctAnswer)) errors.push(`${where(qi)}: mark the correct option.`);
+        if (new Set(opts.map((o) => o.trim().toLowerCase())).size !== opts.length) errors.push(`${where(qi)}: two options are the same — make every option different.`);
       }
       if (q.questionType === 'coding') {
         if (!q.allowedLanguages?.length) errors.push(`${where(qi)}: allow at least one language.`);
@@ -96,6 +97,7 @@ function validate(title: string, sections: BuilderSection[]): string[] {
         if (cases.length === 0) errors.push(`${where(qi)}: add at least one test case.`);
         if (cases.some((tc) => !tc.expectedOutput.trim())) errors.push(`${where(qi)}: every test case needs an expected output.`);
         if (!cases.some((tc) => !tc.hidden)) errors.push(`${where(qi)}: add at least one visible sample case so candidates can Run.`);
+        if (cases.length > 0 && !cases.some((tc) => tc.hidden)) errors.push(`${where(qi)}: add at least one hidden test case, so answers can't be hard-coded from the samples.`);
       }
     });
   });

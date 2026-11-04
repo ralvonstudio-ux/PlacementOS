@@ -8,6 +8,43 @@ const testCaseSchema = z.object({
   hidden: z.boolean().default(false),
 });
 
+// Question rules a paper must meet before candidates can be fairly scored on it. Shared by the
+// save-time schema below and by submit-for-approval (AI drafts are saved without the schema).
+type RuleQuestion = {
+  questionType: string;
+  options?: string[];
+  correctAnswer?: string;
+  testCases?: { hidden?: boolean }[];
+};
+const optionKey = (o: string) => o.trim().toLowerCase();
+export const QUESTION_RULES = {
+  mcqHasCorrectAnswer: (q: RuleQuestion) => q.questionType !== 'mcq' || !!q.correctAnswer?.trim(),
+  mcqOptionsUnique: (q: RuleQuestion) => {
+    if (q.questionType !== 'mcq') return true;
+    const keys = (q.options ?? []).filter((o) => o.trim()).map(optionKey);
+    return new Set(keys).size === keys.length;
+  },
+  codingHasHiddenCase: (q: RuleQuestion) => q.questionType !== 'coding' || !!q.testCases?.some((tc) => tc.hidden),
+  codingHasSampleCase: (q: RuleQuestion) => q.questionType !== 'coding' || !!q.testCases?.some((tc) => !tc.hidden),
+};
+export const QUESTION_RULE_MESSAGES: Record<keyof typeof QUESTION_RULES, string> = {
+  mcqHasCorrectAnswer: 'An MCQ needs a correct answer — mark one option as correct',
+  mcqOptionsUnique: "An MCQ's options must all be different",
+  codingHasHiddenCase: 'A coding question needs at least one hidden test case, so answers can’t be hard-coded from the samples',
+  codingHasSampleCase: 'A coding question needs at least one visible sample case, so candidates can see an example and Run',
+};
+
+/** Every rule a set of questions breaks, as "Question N: message" lines (empty = all fine). */
+export function questionRuleProblems(questions: RuleQuestion[]): string[] {
+  const problems: string[] = [];
+  questions.forEach((q, i) => {
+    for (const key of Object.keys(QUESTION_RULES) as (keyof typeof QUESTION_RULES)[]) {
+      if (!QUESTION_RULES[key](q)) problems.push(`Question ${i + 1}: ${QUESTION_RULE_MESSAGES[key]}`);
+    }
+  });
+  return problems;
+}
+
 const testQuestionSchema = z
   .object({
     questionText: z.string().min(1).trim(),
@@ -39,7 +76,11 @@ const testQuestionSchema = z
   .refine((v) => v.questionType !== 'mcq' || !v.correctAnswer || !!v.options?.some((o) => o.trim() === v.correctAnswer), {
     message: "An MCQ's correct answer must be one of its options",
     path: ['correctAnswer'],
-  });
+  })
+  .refine(QUESTION_RULES.mcqHasCorrectAnswer, { message: QUESTION_RULE_MESSAGES.mcqHasCorrectAnswer, path: ['correctAnswer'] })
+  .refine(QUESTION_RULES.mcqOptionsUnique, { message: QUESTION_RULE_MESSAGES.mcqOptionsUnique, path: ['options'] })
+  .refine(QUESTION_RULES.codingHasHiddenCase, { message: QUESTION_RULE_MESSAGES.codingHasHiddenCase, path: ['testCases'] })
+  .refine(QUESTION_RULES.codingHasSampleCase, { message: QUESTION_RULE_MESSAGES.codingHasSampleCase, path: ['testCases'] });
 
 const testSectionSchema = z.object({
   title: z.string().trim().min(1, 'Every section needs a title'),

@@ -15,6 +15,7 @@ import {
   submitCodeSchema,
   markViewedSchema,
   mediaRequirementsSchema,
+  questionRuleProblems,
 } from './test.validation';
 import { ITest, ITestAttempt, ITestAssignment, ITestQuestionSnapshot, ITestSection, CodingLanguage, ITestQuestionResult, QuestionResultStatus, ITestAttemptEvent, TestAttemptEventType } from './test.model';
 import { SAMPLE_TEST_TEMPLATE } from './sample-test.template';
@@ -431,6 +432,10 @@ export const testService = {
     if (existing.status !== 'draft' && existing.status !== 'rejected') {
       throw new ValidationError('Only a draft or rejected test can be submitted for approval');
     }
+    // AI drafts are saved without the request schema, so the question rules are checked here too —
+    // nothing unscorable reaches the TPO's approval queue.
+    const problems = questionRuleProblems(existing.questions);
+    if (problems.length) throw new ValidationError(`Fix these before submitting: ${problems.join('; ')}`);
     const updated = await testRepository.update(id, ctx.instituteId, { status: 'pending_approval' } as never);
     if (!updated) throw new NotFoundError('Test');
     return toTestApiShape(updated);
