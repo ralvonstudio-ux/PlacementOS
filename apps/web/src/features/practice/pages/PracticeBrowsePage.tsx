@@ -6,6 +6,7 @@ import { WorkspaceHeader } from '@/components/workspace/WorkspaceHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { usePracticeQuestions, usePracticeCompanies } from '../hooks/usePractice';
 import { PracticeQuestionCard } from '../components/PracticeQuestionCard';
+import { PracticeTestView } from '../components/PracticeTestView';
 import type { PracticeCategory } from '@placementos/types';
 
 const CATEGORY_META: Record<PracticeCategory, { title: string; subtitle: string }> = {
@@ -68,9 +69,13 @@ export function PracticeBrowsePage() {
       ) : questions.length === 0 ? (
         <EmptyState icon={BookOpen} title="Nothing here yet" description="Nothing has been shared with you in this section yet — check back soon." />
       ) : (
-        <div className="space-y-3 max-w-3xl">
-          {questions.map((q, i) => <PracticeQuestionCard key={q._id} question={q} index={i} />)}
-        </div>
+        category === 'aptitude' || category === 'reasoning' ? (
+          <PracticeTestView questions={questions} />
+        ) : (
+          <div className="space-y-3 max-w-3xl">
+            {questions.map((q, i) => <PracticeQuestionCard key={q._id} question={q} index={i} />)}
+          </div>
+        )
       )}
     </PageContainer>
   );
